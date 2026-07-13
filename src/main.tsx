@@ -13,7 +13,11 @@ createRoot(document.getElementById('root')!).render(
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
-      .then(reg => console.log('Service Worker registrato con successo:', reg.scope))
+      .then(reg => {
+        console.log('Service Worker registrato con successo:', reg.scope);
+        // Forza l'aggiornamento del Service Worker ad ogni caricamento pagina
+        reg.update();
+      })
       .catch(err => console.error('Errore registrazione Service Worker:', err));
   });
 }
