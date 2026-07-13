@@ -55,7 +55,7 @@ Calendario Attuale: ${JSON.stringify(contextData.schedule.map(s => ({ opId: s.op
   const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
   const payload = {
-    systemInstruction: {
+    system_instruction: {
       parts: { text: systemInstruction }
     },
     contents: [
@@ -65,7 +65,7 @@ Calendario Attuale: ${JSON.stringify(contextData.schedule.map(s => ({ opId: s.op
       }
     ],
     generationConfig: {
-      responseMimeType: "application/json",
+      response_mime_type: "application/json",
       temperature: 0.1
     }
   };
