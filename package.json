@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node -e \"const fs=require('fs'); if(!fs.existsSync('public')) fs.mkdirSync('public'); fs.writeFileSync('public/build-time.json', JSON.stringify({time: Date.now()}))\" && tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },

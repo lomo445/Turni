@@ -111,7 +111,47 @@ function App() {
     return elapsed > 0 && elapsed < maintenanceDuration;
   });
 
+  const [customRemainingMs, setCustomRemainingMs] = useState(0);
+
+  // Poll per rilevare i deploy a caldo
+  useEffect(() => {
+    let localBuildTime = Date.now();
+    try {
+      if (typeof __BUILD_TIME__ === 'number') {
+        localBuildTime = __BUILD_TIME__;
+      }
+    } catch (e) {}
+
+    const checkForUpdates = async () => {
+      try {
+        const res = await fetch(`/build-time.json?t=${Date.now()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && typeof data.time === 'number' && data.time > localBuildTime) {
+            const newElapsed = Date.now() - data.time;
+            const newRemaining = (1 * 60 * 1000) - newElapsed;
+            if (newRemaining > 0) {
+              setCustomRemainingMs(newRemaining);
+              setIsMaintenanceActive(true);
+            } else {
+              // Se è già passato più di un minuto, ricarica subito
+              window.location.reload();
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Errore nel controllo aggiornamenti:", e);
+      }
+    };
+
+    // Controlla ogni 20 secondi
+    const interval = setInterval(checkForUpdates, 20000);
+    return () => clearInterval(interval);
+  }, []);
+
   const remainingMs = (() => {
+    if (customRemainingMs > 0) return customRemainingMs;
+    
     let buildTime = Date.now();
     try {
       if (typeof __BUILD_TIME__ === 'number') {
@@ -122,11 +162,17 @@ function App() {
     return (1 * 60 * 1000) - elapsed;
   })();
 
+  const handleMaintenanceComplete = () => {
+    setIsMaintenanceActive(false);
+    // Ricarica la pagina per caricare il nuovo codice
+    window.location.reload();
+  };
+
   if (isMaintenanceActive && remainingMs > 0) {
     return (
       <MaintenanceScreen 
         remainingMs={remainingMs} 
-        onComplete={() => setIsMaintenanceActive(false)} 
+        onComplete={handleMaintenanceComplete} 
       />
     );
   }
