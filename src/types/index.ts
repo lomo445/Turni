@@ -1,5 +1,6 @@
 export interface Operator {
   id: string;
+  coordinatorId?: string; // ID del coordinatore proprietario
   nome: string;
   cognome: string;
   matricola?: string;
@@ -18,6 +19,7 @@ export type ShiftCategory = 'mattina' | 'pomeriggio' | 'notte' | 'riposo' | 'fer
 
 export interface ShiftType {
   codice: string;
+  coordinatorId?: string; // ID del coordinatore proprietario
   descrizione: string;
   orarioInizio: string; // "HH:MM" or "-"
   orarioFine: string; // "HH:MM" or "-"
@@ -28,6 +30,7 @@ export interface ShiftType {
 
 export interface DailySchedule {
   id: string; // operatorId_date
+  coordinatorId?: string; // ID del coordinatore proprietario
   operatoreId: string;
   data: string; // "YYYY-MM-DD"
   codiceTurno: string; // ShiftType.codice

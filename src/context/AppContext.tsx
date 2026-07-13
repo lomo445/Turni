@@ -16,6 +16,8 @@ interface AppContextType {
   errors: GenerationError[];
   supabaseConfig: SupabaseConfig;
   highlightedDay: number | null;
+  user: any;
+  userRole: 'coordinatore' | 'operatore' | null;
   setHighlightedDay: (d: number | null) => void;
   setYear: (y: number) => void;
   setMonth: (m: number) => void;
@@ -35,6 +37,10 @@ interface AppContextType {
   saveSupabaseSettings: (url: string, key: string) => Promise<boolean>;
   syncData: () => Promise<void>;
   resetDatabase: () => void;
+  signUp: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signInAsOperator: (coordinatorEmail: string) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -48,6 +54,20 @@ export const useApp = () => {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<any>(() => {
+    const saved = localStorage.getItem('tsrm_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const [userRole, setUserRole] = useState<'coordinatore' | 'operatore' | null>(() => {
+    const saved = localStorage.getItem('tsrm_user_role');
+    return saved ? (saved as 'coordinatore' | 'operatore') : null;
+  });
+
+  const [currentCoordinatorId, setCurrentCoordinatorId] = useState<string | null>(() => {
+    return localStorage.getItem('tsrm_coordinator_id');
+  });
+
   const currentDate = new Date();
   const [year, setYear] = useState<number>(() => {
     const saved = localStorage.getItem('tsrm_year');
@@ -340,16 +360,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Sincronizzazione bidirezionale (Push/Pull) reale con Supabase
+  // Sincronizzazione reale multi-tenant con Supabase
   const syncData = async (): Promise<void> => {
-    if (!supabaseConfig.url || !supabaseConfig.anonKey) {
-      throw new Error('Supabase non è configurato.');
+    if (!supabaseConfig.url || !supabaseConfig.anonKey || !currentCoordinatorId) {
+      throw new Error('Supabase non è configurato o l\'utente non è loggato.');
     }
     
     const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
 
-    // 1. Legge lo stato sul cloud
-    const { data: cloudOps, error: errOps } = await supabase.from('operators').select('*');
+    // 1. Legge lo stato sul cloud filtrato per questo coordinatore
+    const { data: cloudOps, error: errOps } = await supabase
+      .from('operators')
+      .select('*')
+      .eq('coordinatorId', currentCoordinatorId);
+
     if (errOps) {
       if (errOps.code === '42P01') {
         throw new Error("Le tabelle non esistono ancora in Supabase. Per favore, esegui lo script SQL fornito nelle istruzioni prima di procedere.");
@@ -357,37 +381,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       throw new Error(`Errore di connessione Supabase: ${errOps.message}`);
     }
 
-    // 2. Se il cloud è vuoto (nessun operatore salvato), invia (PUSH) i dati locali correnti
+    const opsToUpsert = operators.map(o => ({ ...o, coordinatorId: currentCoordinatorId }));
+    const shiftsToUpsert = shifts.map(s => ({ ...s, coordinatorId: currentCoordinatorId }));
+    const scheduleToUpsert = schedule.map(sc => ({ ...sc, coordinatorId: currentCoordinatorId }));
+
+    // 2. Se il cloud è vuoto per questo coordinatore, invia (PUSH) i dati locali
     if (!cloudOps || cloudOps.length === 0) {
-      const { error: opErr } = await supabase.from('operators').upsert(operators);
+      const { error: opErr } = await supabase.from('operators').upsert(opsToUpsert);
       if (opErr) throw new Error(`Errore caricamento operatori: ${opErr.message}`);
       
-      const { error: shErr } = await supabase.from('shifts').upsert(shifts);
+      const { error: shErr } = await supabase.from('shifts').upsert(shiftsToUpsert);
       if (shErr) throw new Error(`Errore caricamento turni: ${shErr.message}`);
       
-      if (schedule.length > 0) {
-        const { error: scErr } = await supabase.from('schedule').upsert(schedule);
+      if (scheduleToUpsert.length > 0) {
+        const { error: scErr } = await supabase.from('schedule').upsert(scheduleToUpsert);
         if (scErr) throw new Error(`Errore caricamento calendario: ${scErr.message}`);
       }
       return;
     }
 
     // 3. Se il cloud contiene dati, esegui l'unione (UPSERT locale -> cloud e poi PULL cloud -> locale)
-    const { error: opErr } = await supabase.from('operators').upsert(operators);
+    const { error: opErr } = await supabase.from('operators').upsert(opsToUpsert);
     if (opErr) throw new Error(`Errore sincronizzazione operatori: ${opErr.message}`);
 
-    const { error: shErr } = await supabase.from('shifts').upsert(shifts);
+    const { error: shErr } = await supabase.from('shifts').upsert(shiftsToUpsert);
     if (shErr) throw new Error(`Errore sincronizzazione turni: ${shErr.message}`);
 
-    if (schedule.length > 0) {
-      const { error: scErr } = await supabase.from('schedule').upsert(schedule);
+    if (scheduleToUpsert.length > 0) {
+      const { error: scErr } = await supabase.from('schedule').upsert(scheduleToUpsert);
       if (scErr) throw new Error(`Errore sincronizzazione calendario: ${scErr.message}`);
     }
 
     // Riscarica i dati finali consolidati
-    const { data: finalOps } = await supabase.from('operators').select('*');
-    const { data: finalShifts } = await supabase.from('shifts').select('*');
-    const { data: finalSchedule } = await supabase.from('schedule').select('*');
+    const { data: finalOps } = await supabase.from('operators').select('*').eq('coordinatorId', currentCoordinatorId);
+    const { data: finalShifts } = await supabase.from('shifts').select('*').eq('coordinatorId', currentCoordinatorId);
+    const { data: finalSchedule } = await supabase.from('schedule').select('*').eq('coordinatorId', currentCoordinatorId);
 
     if (finalOps && finalOps.length > 0) {
       setOperators(finalOps);
@@ -403,17 +431,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Debounced Auto-Sync in background (attivo solo se connesso)
+  // Debounced Auto-Sync in background (attivo solo se connesso e con coordinatore autenticato)
   useEffect(() => {
-    if (!supabaseConfig.connected || !supabaseConfig.url || !supabaseConfig.anonKey) return;
+    if (!supabaseConfig.connected || !supabaseConfig.url || !supabaseConfig.anonKey || !currentCoordinatorId || userRole !== 'coordinatore') return;
 
     const delayDebounceFn = setTimeout(async () => {
       try {
         const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
-        await supabase.from('operators').upsert(operators);
-        await supabase.from('shifts').upsert(shifts);
-        if (schedule.length > 0) {
-          await supabase.from('schedule').upsert(schedule);
+        const opsToUpsert = operators.map(o => ({ ...o, coordinatorId: currentCoordinatorId }));
+        const shiftsToUpsert = shifts.map(s => ({ ...s, coordinatorId: currentCoordinatorId }));
+        const scheduleToUpsert = schedule.map(sc => ({ ...sc, coordinatorId: currentCoordinatorId }));
+
+        await supabase.from('operators').upsert(opsToUpsert);
+        await supabase.from('shifts').upsert(shiftsToUpsert);
+        if (scheduleToUpsert.length > 0) {
+          await supabase.from('schedule').upsert(scheduleToUpsert);
         }
         console.log('Salvataggio automatico cloud completato con successo.');
       } catch (e) {
@@ -422,17 +454,163 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 2500);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [operators, shifts, schedule, supabaseConfig.connected]);
+  }, [operators, shifts, schedule, supabaseConfig.connected, currentCoordinatorId, userRole]);
+
+  // Autenticazione Supabase
+  const signUp = async (email: string, password: string): Promise<void> => {
+    if (!supabaseConfig.url || !supabaseConfig.anonKey) throw new Error("Supabase non configurato.");
+    const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw new Error(error.message);
+    
+    const authUser = data?.user;
+    if (authUser) {
+      // Registra associazione coordinatore
+      const { error: assocErr } = await supabase
+        .from('coordinators')
+        .upsert({ id: authUser.id, email: email.trim().toLowerCase() });
+      if (assocErr) throw new Error(`Associazione coordinatore fallita: ${assocErr.message}`);
+
+      // Invia dati locali come seed per l'account
+      const opsToUpsert = operators.map(o => ({ ...o, coordinatorId: authUser.id }));
+      const shiftsToUpsert = shifts.map(s => ({ ...s, coordinatorId: authUser.id }));
+      const scheduleToUpsert = schedule.map(sc => ({ ...sc, coordinatorId: authUser.id }));
+
+      await supabase.from('operators').upsert(opsToUpsert);
+      await supabase.from('shifts').upsert(shiftsToUpsert);
+      if (scheduleToUpsert.length > 0) {
+        await supabase.from('schedule').upsert(scheduleToUpsert);
+      }
+
+      setUser(authUser);
+      setUserRole('coordinatore');
+      setCurrentCoordinatorId(authUser.id);
+      localStorage.setItem('tsrm_user', JSON.stringify(authUser));
+      localStorage.setItem('tsrm_user_role', 'coordinatore');
+      localStorage.setItem('tsrm_coordinator_id', authUser.id);
+    }
+  };
+
+  const signIn = async (email: string, password: string): Promise<void> => {
+    if (!supabaseConfig.url || !supabaseConfig.anonKey) throw new Error("Supabase non configurato.");
+    const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+    
+    const authUser = data?.user;
+    if (authUser) {
+      await supabase.from('coordinators').upsert({ id: authUser.id, email: email.trim().toLowerCase() });
+
+      setUser(authUser);
+      setUserRole('coordinatore');
+      setCurrentCoordinatorId(authUser.id);
+      localStorage.setItem('tsrm_user', JSON.stringify(authUser));
+      localStorage.setItem('tsrm_user_role', 'coordinatore');
+      localStorage.setItem('tsrm_coordinator_id', authUser.id);
+
+      // Scarica dati coordinatore dal cloud
+      const { data: ops } = await supabase.from('operators').select('*').eq('coordinatorId', authUser.id);
+      const { data: shs } = await supabase.from('shifts').select('*').eq('coordinatorId', authUser.id);
+      const { data: sched } = await supabase.from('schedule').select('*').eq('coordinatorId', authUser.id);
+
+      if (ops && ops.length > 0) {
+        setOperators(ops);
+        localStorage.setItem('tsrm_operators', JSON.stringify(ops));
+      } else {
+        const opsToUpsert = INITIAL_OPERATORS.map(o => ({ ...o, coordinatorId: authUser.id }));
+        await supabase.from('operators').upsert(opsToUpsert);
+        setOperators(INITIAL_OPERATORS);
+        localStorage.setItem('tsrm_operators', JSON.stringify(INITIAL_OPERATORS));
+      }
+
+      if (shs && shs.length > 0) {
+        setShifts(shs);
+        localStorage.setItem('tsrm_shifts', JSON.stringify(shs));
+      } else {
+        const shiftsToUpsert = DEFAULT_SHIFTS.map(s => ({ ...s, coordinatorId: authUser.id }));
+        await supabase.from('shifts').upsert(shiftsToUpsert);
+        setShifts(DEFAULT_SHIFTS);
+        localStorage.setItem('tsrm_shifts', JSON.stringify(DEFAULT_SHIFTS));
+      }
+
+      if (sched) {
+        setSchedule(sched);
+        localStorage.setItem('tsrm_schedule', JSON.stringify(sched));
+      } else {
+        setSchedule([]);
+        localStorage.setItem('tsrm_schedule', '[]');
+      }
+    }
+  };
+
+  const signInAsOperator = async (coordinatorEmail: string): Promise<void> => {
+    if (!supabaseConfig.url || !supabaseConfig.anonKey) throw new Error("Supabase non configurato.");
+    const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+
+    const { data, error } = await supabase
+      .from('coordinators')
+      .select('id')
+      .eq('email', coordinatorEmail.trim().toLowerCase())
+      .single();
+
+    if (error || !data) {
+      throw new Error("Nessun coordinatore registrato con questa email. Controlla l'indirizzo.");
+    }
+
+    const coordId = data.id;
+    setUser(null);
+    setUserRole('operatore');
+    setCurrentCoordinatorId(coordId);
+    localStorage.setItem('tsrm_user_role', 'operatore');
+    localStorage.setItem('tsrm_coordinator_id', coordId);
+
+    // Scarica i dati dell'operatore in sola lettura
+    const { data: ops } = await supabase.from('operators').select('*').eq('coordinatorId', coordId);
+    const { data: shs } = await supabase.from('shifts').select('*').eq('coordinatorId', coordId);
+    const { data: sched } = await supabase.from('schedule').select('*').eq('coordinatorId', coordId);
+
+    if (ops && ops.length > 0) {
+      setOperators(ops);
+      localStorage.setItem('tsrm_operators', JSON.stringify(ops));
+    }
+    if (shs && shs.length > 0) {
+      setShifts(shs);
+      localStorage.setItem('tsrm_shifts', JSON.stringify(shs));
+    }
+    if (sched) {
+      setSchedule(sched);
+      localStorage.setItem('tsrm_schedule', JSON.stringify(sched));
+    }
+  };
+
+  const logout = async (): Promise<void> => {
+    setUser(null);
+    setUserRole(null);
+    setCurrentCoordinatorId(null);
+    localStorage.removeItem('tsrm_user');
+    localStorage.removeItem('tsrm_user_role');
+    localStorage.removeItem('tsrm_coordinator_id');
+
+    setOperators(INITIAL_OPERATORS);
+    setShifts(DEFAULT_SHIFTS);
+    setSchedule([]);
+  };
 
   const resetDatabase = () => {
     localStorage.removeItem('tsrm_operators');
     localStorage.removeItem('tsrm_shifts');
     localStorage.removeItem('tsrm_schedule');
     localStorage.removeItem('tsrm_supabase');
+    localStorage.removeItem('tsrm_user');
+    localStorage.removeItem('tsrm_user_role');
+    localStorage.removeItem('tsrm_coordinator_id');
     setOperators(INITIAL_OPERATORS);
     setShifts(DEFAULT_SHIFTS);
     setSchedule([]);
     setSupabaseConfig({ url: '', anonKey: '', connected: false });
+    setUser(null);
+    setUserRole(null);
+    setCurrentCoordinatorId(null);
     setYear(2026);
     setMonth(1);
   };
@@ -440,11 +618,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider value={{
       year, month, activeView, operators, shifts, schedule, errors, supabaseConfig, highlightedDay,
+      user, userRole,
       setYear, setMonth, setActiveView, setHighlightedDay,
       addOperator, updateOperator, deleteOperator,
       addShiftType, updateShiftType, deleteShiftType,
       assignShift, assignMultipleShifts, runAutoGeneration, clearMonthSchedule,
-      importHistoricalExcel, exportExcelFile, saveSupabaseSettings, syncData, resetDatabase
+      importHistoricalExcel, exportExcelFile, saveSupabaseSettings, syncData, resetDatabase,
+      signUp, signIn, signInAsOperator, logout
     }}>
       {children}
     </AppContext.Provider>

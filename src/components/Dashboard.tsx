@@ -23,7 +23,8 @@ export const Dashboard: React.FC = () => {
     schedule, 
     setActiveView,
     setHighlightedDay,
-    clearMonthSchedule
+    clearMonthSchedule,
+    userRole
   } = useApp();
 
   const monthNames = [
@@ -219,41 +220,47 @@ export const Dashboard: React.FC = () => {
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">Azioni Rapide</h4>
             <div className="space-y-3">
-              <button 
-                onClick={() => setActiveView('generazione')}
-                className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-sm transition-all hover:scale-[1.01]"
-              >
-                <span>Generatore Automatico</span>
-                <ArrowRight className="w-5 h-5" />
-              </button>
+              {userRole === 'coordinatore' && (
+                <button 
+                  onClick={() => setActiveView('generazione')}
+                  className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-sm transition-all hover:scale-[1.01]"
+                >
+                  <span>Generatore Automatico</span>
+                  <ArrowRight className="w-5 h-5" />
+                </button>
+              )}
 
               <button 
                 onClick={() => setActiveView('calendario')}
                 className="w-full flex items-center justify-between p-4 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold transition-all"
               >
-                <span>Gestione Manuale</span>
+                <span>{userRole === 'coordinatore' ? 'Gestione Manuale' : 'Visualizza Calendario'}</span>
                 <ArrowRight className="w-5 h-5 text-slate-500" />
               </button>
 
-              <button 
-                onClick={() => setActiveView('importa')}
-                className="w-full flex items-center justify-between p-4 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold transition-all"
-              >
-                <span>Importa Storico Excel</span>
-                <ArrowRight className="w-5 h-5 text-slate-500" />
-              </button>
+              {userRole === 'coordinatore' && (
+                <>
+                  <button 
+                    onClick={() => setActiveView('importa')}
+                    className="w-full flex items-center justify-between p-4 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold transition-all"
+                  >
+                    <span>Importa Storico Excel</span>
+                    <ArrowRight className="w-5 h-5 text-slate-500" />
+                  </button>
 
-              <button 
-                onClick={() => {
-                  if (confirm(`Sei sicuro di voler azzerare tutti i turni di questo mese (${month}/${year})? L'operazione non è annullabile.`)) {
-                    clearMonthSchedule(year, month);
-                  }
-                }}
-                className="w-full flex items-center justify-between p-4 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold transition-all border border-rose-100"
-              >
-                <span>Azzera Turni del Mese</span>
-                <Trash2 className="w-5 h-5 text-rose-500" />
-              </button>
+                  <button 
+                    onClick={() => {
+                      if (confirm(`Sei sicuro di voler azzerare tutti i turni di questo mese (${month}/${year})? L'operazione non è annullabile.`)) {
+                        clearMonthSchedule(year, month);
+                      }
+                    }}
+                    className="w-full flex items-center justify-between p-4 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold transition-all border border-rose-100"
+                  >
+                    <span>Azzera Turni del Mese</span>
+                    <Trash2 className="w-5 h-5 text-rose-500" />
+                  </button>
+                </>
+              )}
             </div>
           </div>
 

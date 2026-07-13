@@ -8,6 +8,7 @@ import { LegendManager } from './components/LegendManager';
 import { AutomaticGenerator } from './components/AutomaticGenerator';
 import { StatsDashboard } from './components/StatsDashboard';
 import { ExcelImporter } from './components/ExcelImporter';
+import { LoginScreen } from './components/LoginScreen';
 import { RefreshCw, Activity, Wrench } from 'lucide-react';
 
 // Declare global build time injected by Vite config
@@ -97,6 +98,16 @@ const MaintenanceScreen: React.FC<{ remainingMs: number; onComplete: () => void 
   );
 };
 
+const AppContent: React.FC = () => {
+  const { userRole } = useApp();
+
+  if (!userRole) {
+    return <LoginScreen />;
+  }
+
+  return <MainLayout />;
+};
+
 function App() {
   const [isMaintenanceActive, setIsMaintenanceActive] = useState(() => {
     let buildTime = Date.now();
@@ -179,7 +190,7 @@ function App() {
 
   return (
     <AppProvider>
-      <MainLayout />
+      <AppContent />
     </AppProvider>
   );
 }

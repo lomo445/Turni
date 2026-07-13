@@ -38,7 +38,8 @@ export const CalendarView: React.FC = () => {
     runAutoGeneration,
     clearMonthSchedule,
     highlightedDay,
-    setHighlightedDay
+    setHighlightedDay,
+    userRole
   } = useApp();
 
   const [selectedCell, setSelectedCell] = useState<{ opId: string; dateStr: string; currentCode: string } | null>(null);
@@ -119,6 +120,7 @@ export const CalendarView: React.FC = () => {
 
   // Handle cell click
   const handleCellClick = (opId: string, dateStr: string, currentCode: string) => {
+    if (userRole === 'operatore') return; // Sola lettura
     if (highlightedDay) setHighlightedDay(null); // Clear highlight when starting manual edits
 
     if (paintModeCode) {
@@ -192,7 +194,9 @@ export const CalendarView: React.FC = () => {
         key={day}
         onClick={() => handleCellClick(opId, dateStr, code)}
         style={{ backgroundColor: code !== 'L' ? bgColor : undefined }}
-        className={`w-10 h-10 border text-center font-bold text-xs cursor-pointer select-none transition-all hover:brightness-90 ${cellBorder} ${
+        className={`w-10 h-10 border text-center font-bold text-xs select-none transition-all ${
+          userRole === 'operatore' ? 'cursor-default' : 'cursor-pointer hover:brightness-90'
+        } ${cellBorder} ${
           isHighlighted ? 'ring-2 ring-rose-500 ring-inset animate-pulse' : ''
         } ${
           code !== 'L' ? textContrast : (isWk || isHol ? 'bg-amber-50/70 hover:bg-amber-100' : 'bg-white hover:bg-slate-100')
@@ -434,72 +438,76 @@ export const CalendarView: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* AI Assistant Button */}
-          <button
-            onClick={() => setShowAssistant(!showAssistant)}
-            className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center space-x-2 shadow-sm border transition-all ${
-              showAssistant 
-                ? 'bg-indigo-600 text-white border-indigo-700 shadow-indigo-600/15' 
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Bot className={`w-4 h-4 ${showAssistant ? 'text-white' : 'text-indigo-600'}`} />
-            <span>Assistente Smart</span>
-          </button>
-
-          {/* Quick Generate Button */}
-          <button
-            onClick={handleGenerateCurrentMonth}
-            disabled={loading}
-            className="px-4 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white rounded-xl text-sm font-bold flex items-center space-x-2 shadow-md transition-all hover:scale-[1.01] disabled:opacity-50"
-          >
-            {loading ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
-            ) : (
-              <Wand2 className="w-4 h-4" />
-            )}
-            <span>{loading ? 'Generazione...' : 'Genera Turni'}</span>
-          </button>
-
-          {workedShiftsCount > 0 && (
-            <button
-              onClick={() => {
-                if (confirm(`Sei sicuro di voler azzerare tutti i turni del mese di ${monthNames[month - 1]} ${year}?`)) {
-                  clearMonthSchedule(year, month);
-                }
-              }}
-              className="px-4 py-2 border border-rose-200 hover:border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-sm font-bold flex items-center space-x-2 shadow-sm transition-all"
-            >
-              <Trash2 className="w-4 h-4 text-rose-500" />
-              <span>Azzera Mese</span>
-            </button>
-          )}
-
-          {/* Paintbrush tool */}
-          <div className="flex items-center bg-slate-100 p-1.5 rounded-xl border border-slate-200">
-            <button
-              onClick={() => setPaintModeCode(paintModeCode ? null : 'L')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all ${
-                paintModeCode 
-                  ? 'bg-sky-600 text-white shadow-sm' 
-                  : 'text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              <Paintbrush className="w-3.5 h-3.5" />
-              <span>{paintModeCode ? `Pennello: ${paintModeCode}` : 'Pennello Turni'}</span>
-            </button>
-            {paintModeCode && (
-              <select
-                value={paintModeCode}
-                onChange={(e) => setPaintModeCode(e.target.value)}
-                className="bg-transparent border-0 text-slate-800 text-xs font-bold focus:ring-0 focus:outline-none cursor-pointer pl-1 py-0.5"
+          {userRole === 'coordinatore' && (
+            <>
+              {/* AI Assistant Button */}
+              <button
+                onClick={() => setShowAssistant(!showAssistant)}
+                className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center space-x-2 shadow-sm border transition-all ${
+                  showAssistant 
+                    ? 'bg-indigo-600 text-white border-indigo-700 shadow-indigo-600/15' 
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
               >
-                {shifts.map(s => (
-                  <option key={s.codice} value={s.codice}>{s.codice}</option>
-                ))}
-              </select>
-            )}
-          </div>
+                <Bot className={`w-4 h-4 ${showAssistant ? 'text-white' : 'text-indigo-600'}`} />
+                <span>Assistente Smart</span>
+              </button>
+
+              {/* Quick Generate Button */}
+              <button
+                onClick={handleGenerateCurrentMonth}
+                disabled={loading}
+                className="px-4 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white rounded-xl text-sm font-bold flex items-center space-x-2 shadow-md transition-all hover:scale-[1.01] disabled:opacity-50"
+              >
+                {loading ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Wand2 className="w-4 h-4" />
+                )}
+                <span>{loading ? 'Generazione...' : 'Genera Turni'}</span>
+              </button>
+
+              {workedShiftsCount > 0 && (
+                <button
+                  onClick={() => {
+                    if (confirm(`Sei sicuro di voler azzerare tutti i turni del mese di ${monthNames[month - 1]} ${year}?`)) {
+                      clearMonthSchedule(year, month);
+                    }
+                  }}
+                  className="px-4 py-2 border border-rose-200 hover:border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-sm font-bold flex items-center space-x-2 shadow-sm transition-all"
+                >
+                  <Trash2 className="w-4 h-4 text-rose-500" />
+                  <span>Azzera Mese</span>
+                </button>
+              )}
+
+              {/* Paintbrush tool */}
+              <div className="flex items-center bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+                <button
+                  onClick={() => setPaintModeCode(paintModeCode ? null : 'L')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all ${
+                    paintModeCode 
+                      ? 'bg-sky-600 text-white shadow-sm' 
+                      : 'text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <Paintbrush className="w-3.5 h-3.5" />
+                  <span>{paintModeCode ? `Pennello: ${paintModeCode}` : 'Pennello Turni'}</span>
+                </button>
+                {paintModeCode && (
+                  <select
+                    value={paintModeCode}
+                    onChange={(e) => setPaintModeCode(e.target.value)}
+                    className="bg-transparent border-0 text-slate-800 text-xs font-bold focus:ring-0 focus:outline-none cursor-pointer pl-1 py-0.5"
+                  >
+                    {shifts.map(s => (
+                      <option key={s.codice} value={s.codice}>{s.codice}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </>
+          )}
 
           <button 
             onClick={exportExcelFile}
