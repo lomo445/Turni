@@ -37,6 +37,8 @@ interface AppContextType {
   saveSupabaseSettings: (url: string, key: string) => Promise<boolean>;
   syncData: () => Promise<void>;
   resetDatabase: () => void;
+  geminiApiKey: string | null;
+  setGeminiApiKey: (key: string | null) => void;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signInAsOperator: (coordinatorEmail: string) => Promise<void>;
@@ -141,6 +143,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return { url: '', anonKey: '', connected: false };
   });
+
+  const [geminiApiKey, setGeminiApiKeyState] = useState<string | null>(() => {
+    return localStorage.getItem('tsrm_gemini_api_key') || null;
+  });
+
+  const setGeminiApiKey = (key: string | null) => {
+    setGeminiApiKeyState(key);
+    if (key) {
+      localStorage.setItem('tsrm_gemini_api_key', key);
+    } else {
+      localStorage.removeItem('tsrm_gemini_api_key');
+    }
+  };
 
   const [highlightedDay, setHighlightedDay] = useState<number | null>(null);
 
@@ -619,7 +634,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider value={{
       year, month, activeView, operators, shifts, schedule, errors, supabaseConfig, highlightedDay,
-      user, userRole,
+      user, userRole, geminiApiKey, setGeminiApiKey,
       setYear, setMonth, setActiveView, setHighlightedDay,
       addOperator, updateOperator, deleteOperator,
       addShiftType, updateShiftType, deleteShiftType,

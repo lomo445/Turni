@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { isWeekend, isHoliday } from '../utils/scheduler';
-import { parseCommand } from '../utils/nlp';
 import type { ParsedAction } from '../utils/nlp';
+import { askGemini } from '../utils/aiAgent';
 import { 
   Printer, 
   Copy, 
@@ -39,7 +39,8 @@ export const CalendarView: React.FC = () => {
     clearMonthSchedule,
     highlightedDay,
     setHighlightedDay,
-    userRole
+    userRole,
+    geminiApiKey
   } = useApp();
 
   const [selectedCell, setSelectedCell] = useState<{ opId: string; dateStr: string; currentCode: string } | null>(null);
@@ -52,6 +53,7 @@ export const CalendarView: React.FC = () => {
   const [commandText, setCommandText] = useState('');
   const [parsedActions, setParsedActions] = useState<ParsedAction[]>([]);
   const [assistantMessage, setAssistantMessage] = useState('');
+  const [loadingAi, setLoadingAi] = useState(false);
 
   // Quick Form States (Ferie)
   const [formOpId, setFormOpId] = useState('');
@@ -225,9 +227,51 @@ export const CalendarView: React.FC = () => {
   // NLP chat Assistant command parser
   const handleCommandChange = (text: string) => {
     setCommandText(text);
-    const { actions, message } = parseCommand(text, year, month, operators, shifts, schedule);
-    setParsedActions(actions);
-    setAssistantMessage(message);
+  };
+
+  const handleSendToAI = async () => {
+    if (!commandText.trim()) return;
+    if (!geminiApiKey) {
+      setAssistantMessage('Devi prima configurare la tua Gemini API Key nelle impostazioni (icona ingranaggio).');
+      return;
+    }
+
+    setLoadingAi(true);
+    setAssistantMessage('L\'intelligenza artificiale sta analizzando la tua richiesta...');
+    setParsedActions([]);
+
+    try {
+      const response = await askGemini(commandText, geminiApiKey, {
+        operators,
+        shifts,
+        schedule,
+        year,
+        month
+      });
+
+      setAssistantMessage(response.message || 'Risposta ricevuta dall\'AI.');
+
+      if (response.actions && response.actions.length > 0) {
+         const newParsedActions = response.actions.map(act => {
+           const op = operators.find(o => String(o.id) === String(act.opId));
+           const turno = shifts.find(s => s.codice === act.code);
+           return {
+              operatoreId: act.opId,
+              operatoreNome: op ? `${op.nome} ${op.cognome}` : 'Sconosciuto',
+              giorno: act.day,
+              data: `${year}-${String(month).padStart(2, '0')}-${String(act.day).padStart(2, '0')}`,
+              nuovoTurno: act.action === 'clear' ? '' : (act.code || ''),
+              vecchioTurno: '',
+              descrizione: act.action === 'clear' ? 'Rimozione Turno' : (turno ? turno.descrizione : 'Turno')
+           };
+         });
+         setParsedActions(newParsedActions);
+      }
+    } catch (e: any) {
+      setAssistantMessage(e.message || 'Errore di comunicazione con l\'AI.');
+    } finally {
+      setLoadingAi(false);
+    }
   };
 
   const handleApplyAssistant = () => {
@@ -971,9 +1015,32 @@ export const CalendarView: React.FC = () => {
                       rows={3}
                       value={commandText}
                       onChange={(e) => handleCommandChange(e.target.value)}
-                      placeholder="Scrivi qui per operare cambi o ferie..."
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendToAI();
+                        }
+                      }}
+                      placeholder="Chiedi un'analisi dei turni o scrivi comandi in linguaggio naturale (es. 'Scambia i turni di domani tra Daniele e Gabriele')"
                       className="px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none resize-none font-medium text-slate-800"
                     />
+                    <button
+                      onClick={handleSendToAI}
+                      disabled={loadingAi || !commandText.trim()}
+                      className="mt-2 w-full py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all"
+                    >
+                      {loadingAi ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Elaborazione AI...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Bot className="w-3.5 h-3.5" />
+                          <span>Invia all'Assistente AI</span>
+                        </>
+                      )}
+                    </button>
                   </div>
 
                   {parsedActions.length > 0 && (
