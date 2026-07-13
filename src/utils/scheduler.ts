@@ -213,11 +213,33 @@ export function generateSchedule(
       return hours[a] - hours[b]; // Priorità a chi ha meno ore
     });
 
-    // 2c. Preservazione del "Turno Nudo"
-    // Come richiesto, i Jolly (giorni vuoti nel ciclo di 15) non vengono usati per
-    // tappare automaticamente i buchi (Mattine o Pomeriggi mancanti), ma vengono
-    // lasciati a Riposo (L) in modo che il coordinatore possa assegnarli manualmente
-    // agli "altri" o smistarli secondo necessità.
+    // 2c. Copertura delle mancanze con i Jolly
+    // IMPORTANTE: I Jolly (i 5 giorni vuoti) NON possono mai fare Notti!
+    // Solo Mattine, Pomeriggi o Riposi.
+    
+    // Pomeriggi
+    while (pNeeded > 0 && jollies.length > 0) {
+      const opId = jollies.shift()!;
+      const codes = isFestivo ? ['P1', 'P2'] : ['P1', 'P2', 'P3'];
+      const assignedCode = codes.find(c => !Object.values(dayAssignments).includes(c)) || 'P1';
+      dayAssignments[opId] = assignedCode;
+      pNeeded--;
+      hours[opId] += 6.5;
+      if (isFestivo) weekends[opId]++;
+    }
+
+    // Mattine
+    while (mNeeded > 0 && jollies.length > 0) {
+      const opId = jollies.shift()!;
+      const codes = isFestivo ? ['M1', 'M2'] : ['M1', 'M2', 'M3'];
+      const assignedCode = codes.find(c => !Object.values(dayAssignments).includes(c)) || 'M1';
+      dayAssignments[opId] = assignedCode;
+      mNeeded--;
+      hours[opId] += 6.5;
+      if (isFestivo) weekends[opId]++;
+    }
+
+    // I Jolly rimanenti vanno a Riposo
     jollies.forEach(opId => {
       dayAssignments[opId] = 'L';
     });
