@@ -8,7 +8,7 @@ import { LegendManager } from './components/LegendManager';
 import { AutomaticGenerator } from './components/AutomaticGenerator';
 import { StatsDashboard } from './components/StatsDashboard';
 import { ExcelImporter } from './components/ExcelImporter';
-import { Cpu, RefreshCw, Activity } from 'lucide-react';
+import { RefreshCw, Activity, Wrench } from 'lucide-react';
 
 // Declare global build time injected by Vite config
 declare const __BUILD_TIME__: number;
@@ -64,22 +64,25 @@ const MaintenanceScreen: React.FC<{ remainingMs: number; onComplete: () => void 
       <div className="max-w-md w-full text-center space-y-8 z-10 bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl p-8 rounded-3xl shadow-2xl">
         <div className="flex justify-center">
           <div className="p-4 bg-sky-500/10 rounded-2xl border border-sky-500/20 text-sky-400 relative">
-            <Cpu className="w-10 h-10 animate-spin" style={{ animationDuration: '6s' }} />
+            <Wrench className="w-10 h-10 animate-bounce" style={{ animationDuration: '3s' }} />
             <Activity className="w-5 h-5 absolute bottom-2 right-2 text-indigo-400 animate-pulse" />
           </div>
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-2xl font-extrabold tracking-tight uppercase bg-gradient-to-r from-sky-400 to-indigo-400 bg-clip-text text-transparent">
-            Aggiornamento Planner
+          <h2 className="text-xl font-bold tracking-tight uppercase text-sky-400">
+            Work in Progress
           </h2>
-          <p className="text-slate-400 text-sm leading-relaxed">
-            Stiamo applicando e ottimizzando le modifiche richieste per il reparto Radiologia DEU. Il sistema tornerà attivo tra pochissimo.
+          <h3 className="text-2xl font-black tracking-tight text-white mt-1 leading-tight">
+            Non ti arrabbiare, stiamo lavorando per te!
+          </h3>
+          <p className="text-slate-400 text-sm leading-relaxed pt-1">
+            Stiamo caricando le ultime novità e ottimizzando il Planner. Questione di pochi secondi e saremo di nuovo operativi.
           </p>
         </div>
 
         {/* Live Countdown Circle */}
-        <div className="flex flex-col items-center justify-center py-4">
+        <div className="flex flex-col items-center justify-center py-4 bg-slate-950/40 rounded-2xl border border-slate-800/50">
           <div className="text-5xl font-black text-white tracking-tight flex items-baseline">
             <span>{timeLeft}</span>
             <span className="text-xs font-bold text-slate-500 ml-1">secondi</span>
@@ -88,11 +91,6 @@ const MaintenanceScreen: React.FC<{ remainingMs: number; onComplete: () => void 
             <RefreshCw className="w-3.5 h-3.5 animate-spin" />
             Ottimizzazione in corso...
           </span>
-        </div>
-
-        {/* Footer citation */}
-        <div className="text-[10px] text-slate-500 font-semibold tracking-widest uppercase">
-          TSRM Radiologia DEU • USL8
         </div>
       </div>
     </div>
