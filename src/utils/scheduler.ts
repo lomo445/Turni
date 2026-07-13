@@ -37,7 +37,8 @@ export function generateSchedule(
   operators: Operator[],
   shiftTypes: ShiftType[],
   previousSchedule: DailySchedule[],
-  currentMonthLeaves: DailySchedule[]
+  currentMonthLeaves: DailySchedule[],
+  fullHistory?: DailySchedule[]
 ): { schedule: DailySchedule[]; errors: GenerationError[] } {
   
   const numDays = new Date(year, month, 0).getDate();
@@ -80,6 +81,32 @@ export function generateSchedule(
     const shift = shiftTypes.find(s => s.codice === code);
     return shift ? shift.durataOre : 0;
   };
+
+  // Calcola i festivi storici lavorati da ciascun dipendente prima del mese corrente
+  const targetMonthDateObj = new Date(year, month - 1, 1);
+  const historicalFestivi: Record<string, number> = {};
+  activeOperators.forEach(op => {
+    historicalFestivi[op.id] = 0;
+  });
+
+  if (fullHistory) {
+    fullHistory.forEach(s => {
+      const dateParts = s.data.split('-');
+      if (dateParts.length < 3) return;
+      const sYear = parseInt(dateParts[0]);
+      const sMonth = parseInt(dateParts[1]);
+      const sDay = parseInt(dateParts[2]);
+      
+      const sDate = new Date(sYear, sMonth - 1, sDay);
+      if (sDate < targetMonthDateObj) {
+        const cat = getShiftCategory(s.codiceTurno);
+        const isFest = isWeekend(sYear, sMonth, sDay) || isHoliday(sYear, sMonth, sDay);
+        if (isFest && cat !== 'riposo' && cat !== 'ferie' && cat !== 'assenza') {
+          historicalFestivi[s.operatoreId] = (historicalFestivi[s.operatoreId] || 0) + 1;
+        }
+      }
+    });
+  }
 
   // Map of date string -> operatorId -> preassigned shift
   const preassigned: Record<string, Record<string, string>> = {};
@@ -192,8 +219,12 @@ export function generateSchedule(
       
       const shiftsToFill: { code: string; cat: string }[] = [];
       
-      let mNeeded = 3;
-      let pNeeded = 3;
+      const dayOfWeek = new Date(year, month - 1, d).getDay();
+      const isSunday = dayOfWeek === 0;
+      const isFestivoForCoverage = isSunday || isHol;
+
+      let mNeeded = isFestivoForCoverage ? 2 : 3;
+      let pNeeded = isFestivoForCoverage ? 2 : 3;
       let nNeeded = 2;
 
       preassignedCodes.forEach(code => {
@@ -212,14 +243,14 @@ export function generateSchedule(
       }
       // Afternoons:
       if (pNeeded > 0) {
-        const availableP = ['P1', 'P2', 'P3'].filter(c => !preassignedCodes.includes(c));
+        const availableP = (isFestivoForCoverage ? ['P1', 'P2'] : ['P1', 'P2', 'P3']).filter(c => !preassignedCodes.includes(c));
         for (let i = 0; i < Math.min(pNeeded, availableP.length); i++) {
           shiftsToFill.push({ code: availableP[i], cat: 'pomeriggio' });
         }
       }
       // Mornings:
       if (mNeeded > 0) {
-        const availableM = ['M1', 'M2', 'M3'].filter(c => !preassignedCodes.includes(c));
+        const availableM = (isFestivoForCoverage ? ['M1', 'M2'] : ['M1', 'M2', 'M3']).filter(c => !preassignedCodes.includes(c));
         for (let i = 0; i < Math.min(mNeeded, availableM.length); i++) {
           shiftsToFill.push({ code: availableM[i], cat: 'mattina' });
         }
@@ -300,9 +331,11 @@ export function generateSchedule(
             }
           }
 
-          // Weekend and holiday balancing
+          // Weekend and holiday balancing (current + history)
           if (isFestivo) {
-            score += stats[op.id].weekends * 50;
+            const currentFestivi = stats[op.id].weekends;
+            const pastFestivi = historicalFestivi[op.id] || 0;
+            score += (currentFestivi + pastFestivi) * 70;
           }
 
           // Add a small random noise to explore search space
@@ -535,14 +568,23 @@ export function validateSchedule(
         errors.push({ tipo: 'warning', giorno: d, messaggio: `Giorno ${d}: Rilevate troppe ferie/assenze contemporanee (${fCount}/3 consentite)` });
       }
 
-    if (mCount < 3) {
-      errors.push({ tipo: 'critico', giorno: d, messaggio: `Giorno ${d}: Copertura mattina insufficiente (${mCount}/3)` });
+    const dayOfWeek = new Date(year, month - 1, d).getDay();
+    const isSunday = dayOfWeek === 0;
+    const isHol = isHoliday(year, month, d);
+    const isFestivoForCoverage = isSunday || isHol;
+
+    const mTarget = isFestivoForCoverage ? 2 : 3;
+    const pTarget = isFestivoForCoverage ? 2 : 3;
+    const nTarget = 2;
+
+    if (mCount < mTarget) {
+      errors.push({ tipo: 'critico', giorno: d, messaggio: `Giorno ${d}: Copertura mattina insufficiente (${mCount}/${mTarget})` });
     }
-    if (pCount < 3) {
-      errors.push({ tipo: 'critico', giorno: d, messaggio: `Giorno ${d}: Copertura pomeriggio insufficiente (${pCount}/3)` });
+    if (pCount < pTarget) {
+      errors.push({ tipo: 'critico', giorno: d, messaggio: `Giorno ${d}: Copertura pomeriggio insufficiente (${pCount}/${pTarget})` });
     }
-    if (nCount < 2) {
-      errors.push({ tipo: 'critico', giorno: d, messaggio: `Giorno ${d}: Copertura notte insufficiente (${nCount}/2)` });
+    if (nCount < nTarget) {
+      errors.push({ tipo: 'critico', giorno: d, messaggio: `Giorno ${d}: Copertura notte insufficiente (${nCount}/${nTarget})` });
     }
   }
 
