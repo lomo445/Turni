@@ -131,17 +131,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return JULY_2026_SCHEDULE;
   });
 
-  const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(() => {
-    const saved = localStorage.getItem('tsrm_supabase');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') return parsed;
-      } catch (e) {
-        console.error("Errore nel caricamento della config Supabase da localStorage:", e);
-      }
-    }
-    return { url: '', anonKey: '', connected: false };
+  const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>({
+    url: 'https://oqglyzmfbtgznybccpnf.supabase.co',
+    anonKey: 'sb_publishable_4IOMMi2znxIK1OBqzjnnAQ_9UbLm4Wr',
+    connected: true
   });
 
   const [geminiApiKey, setGeminiApiKeyState] = useState<string | null>(() => {
@@ -623,7 +616,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOperators(INITIAL_OPERATORS);
     setShifts(DEFAULT_SHIFTS);
     setSchedule([]);
-    setSupabaseConfig({ url: '', anonKey: '', connected: false });
+    setSchedule([]);
     setUser(null);
     setUserRole(null);
     setCurrentCoordinatorId(null);

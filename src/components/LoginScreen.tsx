@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Activity, KeyRound, Mail, UserCheck, ShieldAlert, Eye, EyeOff, Loader2, Settings } from 'lucide-react';
-import { SupabaseSettings } from './SupabaseSettings';
+import { Activity, KeyRound, Mail, UserCheck, ShieldAlert, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export const LoginScreen: React.FC = () => {
   const { signIn, signUp, signInAsOperator } = useApp();
   
   const [role, setRole] = useState<'coordinatore' | 'operatore'>('coordinatore');
   const [isRegister, setIsRegister] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   
   // Form fields
   const [email, setEmail] = useState('');
@@ -206,24 +204,6 @@ export const LoginScreen: React.FC = () => {
             )}
           </button>
         </form>
-
-        {/* Settings Toggle Button */}
-        <div className="mt-6 flex justify-center">
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className="flex items-center space-x-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-300 transition-colors uppercase tracking-wider"
-          >
-            <Settings className="w-3.5 h-3.5" />
-            <span>Configura Cloud Database</span>
-          </button>
-        </div>
-
-        {/* Embedded Settings Modal */}
-        {showSettings && (
-          <div className="mt-4 pt-4 border-t border-slate-800/50 animate-in fade-in slide-in-from-top-2 duration-200 text-left">
-            <SupabaseSettings />
-          </div>
-        )}
       </div>
     </div>
   );
