@@ -61,25 +61,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Load state from localStorage or use defaults
   const [operators, setOperators] = useState<Operator[]>(() => {
     const saved = localStorage.getItem('tsrm_operators');
-    return saved ? JSON.parse(saved) : INITIAL_OPERATORS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {
+        console.error("Errore nel caricamento degli operatori da localStorage:", e);
+      }
+    }
+    return INITIAL_OPERATORS;
   });
 
   const [shifts, setShifts] = useState<ShiftType[]>(() => {
     const saved = localStorage.getItem('tsrm_shifts');
-    return saved ? JSON.parse(saved) : DEFAULT_SHIFTS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {
+        console.error("Errore nel caricamento dei tipi turno da localStorage:", e);
+      }
+    }
+    return DEFAULT_SHIFTS;
   });
 
   const [schedule, setSchedule] = useState<DailySchedule[]>(() => {
     const saved = localStorage.getItem('tsrm_schedule');
     if (saved) {
-      const parsed = JSON.parse(saved);
-      const hasJuly = parsed.some((s: any) => s.data.startsWith('2026-07'));
-      if (!hasJuly) {
-        const merged = [...parsed, ...JULY_2026_SCHEDULE];
-        localStorage.setItem('tsrm_schedule', JSON.stringify(merged));
-        return merged;
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const hasJuly = parsed.some((s: any) => s && s.data && typeof s.data === 'string' && s.data.startsWith('2026-07'));
+          if (!hasJuly) {
+            const merged = [...parsed, ...JULY_2026_SCHEDULE];
+            localStorage.setItem('tsrm_schedule', JSON.stringify(merged));
+            return merged;
+          }
+          return parsed;
+        }
+      } catch (e) {
+        console.error("Errore nel caricamento dello storico calendario da localStorage:", e);
       }
-      return parsed;
     }
     localStorage.setItem('tsrm_schedule', JSON.stringify(JULY_2026_SCHEDULE));
     return JULY_2026_SCHEDULE;
@@ -87,7 +109,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(() => {
     const saved = localStorage.getItem('tsrm_supabase');
-    return saved ? JSON.parse(saved) : { url: '', anonKey: '', connected: false };
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch (e) {
+        console.error("Errore nel caricamento della config Supabase da localStorage:", e);
+      }
+    }
+    return { url: '', anonKey: '', connected: false };
   });
 
   const [highlightedDay, setHighlightedDay] = useState<number | null>(null);
