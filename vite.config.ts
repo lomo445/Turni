@@ -8,4 +8,7 @@ export default defineConfig({
     react(),
     tailwindcss()
   ],
+  define: {
+    __BUILD_TIME__: Date.now(),
+  }
 })

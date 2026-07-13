@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
@@ -8,6 +8,10 @@ import { LegendManager } from './components/LegendManager';
 import { AutomaticGenerator } from './components/AutomaticGenerator';
 import { StatsDashboard } from './components/StatsDashboard';
 import { ExcelImporter } from './components/ExcelImporter';
+import { Cpu, RefreshCw, Activity } from 'lucide-react';
+
+// Declare global build time injected by Vite config
+declare const __BUILD_TIME__: number;
 
 const MainLayout: React.FC = () => {
   const { activeView } = useApp();
@@ -31,7 +35,104 @@ const MainLayout: React.FC = () => {
   );
 };
 
+const MaintenanceScreen: React.FC<{ remainingMs: number; onComplete: () => void }> = ({ remainingMs, onComplete }) => {
+  const [timeLeft, setTimeLeft] = useState(Math.ceil(remainingMs / 1000));
+
+  useEffect(() => {
+    if (timeLeft <= 0) {
+      onComplete();
+      return;
+    }
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          onComplete();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [timeLeft, onComplete]);
+
+  return (
+    <div className="flex flex-col items-center justify-center h-screen w-screen bg-slate-950 text-white font-sans p-6 relative">
+      {/* Background radial glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(14,165,233,0.06)_0%,transparent_70%)] pointer-events-none" />
+      
+      <div className="max-w-md w-full text-center space-y-8 z-10 bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl p-8 rounded-3xl shadow-2xl">
+        <div className="flex justify-center">
+          <div className="p-4 bg-sky-500/10 rounded-2xl border border-sky-500/20 text-sky-400 relative">
+            <Cpu className="w-10 h-10 animate-spin" style={{ animationDuration: '6s' }} />
+            <Activity className="w-5 h-5 absolute bottom-2 right-2 text-indigo-400 animate-pulse" />
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <h2 className="text-2xl font-extrabold tracking-tight uppercase bg-gradient-to-r from-sky-400 to-indigo-400 bg-clip-text text-transparent">
+            Aggiornamento Planner
+          </h2>
+          <p className="text-slate-400 text-sm leading-relaxed">
+            Stiamo applicando e ottimizzando le modifiche richieste per il reparto Radiologia DEU. Il sistema tornerà attivo tra pochissimo.
+          </p>
+        </div>
+
+        {/* Live Countdown Circle */}
+        <div className="flex flex-col items-center justify-center py-4">
+          <div className="text-5xl font-black text-white tracking-tight flex items-baseline">
+            <span>{timeLeft}</span>
+            <span className="text-xs font-bold text-slate-500 ml-1">secondi</span>
+          </div>
+          <span className="text-xs text-sky-400/80 font-bold mt-2 flex items-center gap-1.5 uppercase tracking-wider animate-pulse">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            Ottimizzazione in corso...
+          </span>
+        </div>
+
+        {/* Footer citation */}
+        <div className="text-[10px] text-slate-500 font-semibold tracking-widest uppercase">
+          TSRM Radiologia DEU • USL8
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function App() {
+  const [isMaintenanceActive, setIsMaintenanceActive] = useState(() => {
+    let buildTime = Date.now();
+    try {
+      if (typeof __BUILD_TIME__ === 'number') {
+        buildTime = __BUILD_TIME__;
+      }
+    } catch (e) {}
+
+    const elapsed = Date.now() - buildTime;
+    const maintenanceDuration = 3 * 60 * 1000; // 3 minutes
+    return elapsed > 0 && elapsed < maintenanceDuration;
+  });
+
+  const remainingMs = (() => {
+    let buildTime = Date.now();
+    try {
+      if (typeof __BUILD_TIME__ === 'number') {
+        buildTime = __BUILD_TIME__;
+      }
+    } catch (e) {}
+    const elapsed = Date.now() - buildTime;
+    return (3 * 60 * 1000) - elapsed;
+  })();
+
+  if (isMaintenanceActive && remainingMs > 0) {
+    return (
+      <MaintenanceScreen 
+        remainingMs={remainingMs} 
+        onComplete={() => setIsMaintenanceActive(false)} 
+      />
+    );
+  }
+
   return (
     <AppProvider>
       <MainLayout />

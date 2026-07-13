@@ -91,13 +91,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          const hasJuly = parsed.some((s: any) => s && s.data && typeof s.data === 'string' && s.data.startsWith('2026-07'));
+          const validParsed = parsed.filter((s: any) => s && s.data && typeof s.data === 'string' && s.operatoreId && s.codiceTurno);
+          const hasJuly = validParsed.some((s: any) => s.data.startsWith('2026-07'));
           if (!hasJuly) {
-            const merged = [...parsed, ...JULY_2026_SCHEDULE];
+            const merged = [...validParsed, ...JULY_2026_SCHEDULE];
             localStorage.setItem('tsrm_schedule', JSON.stringify(merged));
             return merged;
           }
-          return parsed;
+          return validParsed;
         }
       } catch (e) {
         console.error("Errore nel caricamento dello storico calendario da localStorage:", e);
