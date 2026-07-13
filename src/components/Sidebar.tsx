@@ -8,7 +8,7 @@ import {
   BarChart3, 
   FileSpreadsheet, 
   Settings,
-  CloudLightning,
+  Activity,
   AlertTriangle
 } from 'lucide-react';
 
@@ -30,13 +30,13 @@ export const Sidebar: React.FC = () => {
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 text-slate-200 flex flex-col no-print">
       {/* Brand Header */}
-      <div className="p-6 border-b border-slate-800 flex items-center space-x-3 bg-gradient-to-r from-slate-950 to-slate-900">
-        <div className="p-2 bg-sky-500/10 rounded-lg border border-sky-500/30 text-sky-400">
-          <CloudLightning className="w-6 h-6 animate-pulse" />
+      <div className="p-6 border-b border-slate-800 flex items-center space-x-3 bg-slate-950">
+        <div className="p-2.5 bg-sky-500/10 rounded-xl border border-sky-500/20 text-sky-400 shadow-inner">
+          <Activity className="w-5 h-5" />
         </div>
         <div>
-          <h1 className="text-lg font-bold tracking-tight text-white m-0 p-0 leading-tight">Turni TSRM</h1>
-          <p className="text-xs text-slate-400 m-0">Radiologia DEU - USL8</p>
+          <h1 className="text-base font-extrabold tracking-wide text-white m-0 p-0 uppercase">TSRM Planner</h1>
+          <p className="text-[10px] text-slate-400 font-bold m-0 tracking-wider">RADIOLOGIA DEU • USL8</p>
         </div>
       </div>
 
