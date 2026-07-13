@@ -68,28 +68,28 @@ export function generateSchedule(
   // Mappatura hardcoded degli offset per i 15 operatori base in base alle terzine
   const OPERATOR_EPOCH_OFFSETS: Record<string, number> = {
     // Terzina 1
-    'fedeli': 2,
-    'guerrini g': 7,
-    'guerrini g.': 7,
-    'ferrante': 12,
+    'fedeli': 5,
+    'guerrini g': 10,
+    'guerrini g.': 10,
+    'ferrante': 0,
     // Terzina 2
-    'tenti': 1,
-    'donati': 6,
-    'guerrini s': 11,
-    'guerrini s.': 11,
+    'tenti': 4,
+    'donati': 9,
+    'guerrini s': 14,
+    'guerrini s.': 14,
     // Terzina 3
-    'peruzzi': 0,
-    'morano': 5,
-    'testi': 10,
+    'peruzzi': 3,
+    'morano': 8,
+    'testi': 13,
     // Terzina 4
-    'arrais': 4,
-    'mondanelli': 9,
-    'mancini': 14,
+    'arrais': 7,
+    'mondanelli': 12,
+    'mancini': 2,
     // Terzina 5
-    'degl\'innocenti': 3,
-    'degl innocenti': 3,
-    'camisa': 8,
-    'gattari': 13
+    'degl\'innocenti': 6,
+    'degl innocenti': 6,
+    'camisa': 11,
+    'gattari': 1
   };
 
   const targetDate = new Date(year, month - 1, 1);
