@@ -107,7 +107,7 @@ function App() {
     } catch (e) {}
 
     const elapsed = Date.now() - buildTime;
-    const maintenanceDuration = 3 * 60 * 1000; // 3 minutes
+    const maintenanceDuration = 1 * 60 * 1000; // 1 minute
     return elapsed > 0 && elapsed < maintenanceDuration;
   });
 
@@ -119,7 +119,7 @@ function App() {
       }
     } catch (e) {}
     const elapsed = Date.now() - buildTime;
-    return (3 * 60 * 1000) - elapsed;
+    return (1 * 60 * 1000) - elapsed;
   })();
 
   if (isMaintenanceActive && remainingMs > 0) {
