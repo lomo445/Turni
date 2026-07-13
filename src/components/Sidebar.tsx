@@ -9,11 +9,32 @@ import {
   FileSpreadsheet, 
   Settings,
   Activity,
-  AlertTriangle
+  AlertTriangle,
+  Cloud,
+  CloudOff,
+  RefreshCw
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
-  const { activeView, setActiveView, errors } = useApp();
+  const { activeView, setActiveView, errors, supabaseConfig, syncData } = useApp();
+  const [syncing, setSyncing] = React.useState(false);
+  const [syncError, setSyncError] = React.useState<string | null>(null);
+
+  const handleSync = async () => {
+    if (!supabaseConfig.connected) {
+      setActiveView('impostazioni');
+      return;
+    }
+    setSyncing(true);
+    setSyncError(null);
+    try {
+      await syncData();
+    } catch (e: any) {
+      setSyncError(e.message || 'Errore');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -80,6 +101,43 @@ export const Sidebar: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Cloud Sync Status Box */}
+      <div className="px-4 py-2 border-t border-slate-800">
+        <button
+          onClick={handleSync}
+          disabled={syncing}
+          className={`w-full flex items-center justify-between p-3 rounded-xl text-xs font-semibold transition-all border ${
+            supabaseConfig.connected
+              ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-300'
+              : 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-500'
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            {syncing ? (
+              <RefreshCw className="w-4 h-4 text-sky-400 animate-spin" />
+            ) : supabaseConfig.connected ? (
+              <Cloud className="w-4 h-4 text-emerald-400 animate-pulse" />
+            ) : (
+              <CloudOff className="w-4 h-4 text-slate-500" />
+            )}
+            <div className="text-left">
+              <p className="font-bold text-white">
+                {syncing ? 'Sincronizzazione...' : supabaseConfig.connected ? 'Cloud Attivo' : 'Cloud Disconnesso'}
+              </p>
+              <p className="text-[10px] text-slate-500">
+                {supabaseConfig.connected ? 'Clicca per allineare' : 'Configura in Impostazioni'}
+              </p>
+            </div>
+          </div>
+          {supabaseConfig.connected && !syncing && (
+            <RefreshCw className="w-3.5 h-3.5 text-slate-500 hover:text-white transition-all" />
+          )}
+        </button>
+        {syncError && (
+          <p className="text-[9px] text-rose-500 mt-1 font-semibold text-center">{syncError}</p>
+        )}
+      </div>
 
       {/* Footer Info */}
       <div className="p-4 border-t border-slate-800 text-center text-xs text-slate-500">

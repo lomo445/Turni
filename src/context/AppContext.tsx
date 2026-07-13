@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import type { Operator, ShiftType, DailySchedule, SupabaseConfig } from '../types';
 import { INITIAL_OPERATORS, DEFAULT_SHIFTS, JULY_2026_SCHEDULE } from '../constants/initialData';
 import { generateSchedule, validateSchedule } from '../utils/scheduler';
@@ -307,29 +308,111 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Supabase mock / settings setup
   const saveSupabaseSettings = async (url: string, key: string): Promise<boolean> => {
-    // In a real environment, we'd test the connection here.
-    // For now, we simulate a successful connection.
-    if (url && key) {
+    if (!url || !key) {
+      setSupabaseConfig({ url: '', anonKey: '', connected: false });
+      localStorage.removeItem('tsrm_supabase');
+      return false;
+    }
+
+    try {
+      const supabase = createClient(url, key);
+      const { error } = await supabase.from('operators').select('id').limit(1);
+      
+      if (error) {
+        if (error.code === '42P01') {
+          // Le tabelle non esistono ancora, ma le credenziali sono valide!
+          setSupabaseConfig({ url, anonKey: key, connected: true });
+          localStorage.setItem('tsrm_supabase', JSON.stringify({ url, anonKey: key, connected: true }));
+          return true;
+        }
+        // Per qualsiasi altro tipo di errore (credenziali errate, CORS, ecc.)
+        setSupabaseConfig({ url: '', anonKey: '', connected: false });
+        return false;
+      }
+
       setSupabaseConfig({ url, anonKey: key, connected: true });
+      localStorage.setItem('tsrm_supabase', JSON.stringify({ url, anonKey: key, connected: true }));
       return true;
-    } else {
+    } catch (e) {
+      console.error('Errore durante il test di connessione:', e);
       setSupabaseConfig({ url: '', anonKey: '', connected: false });
       return false;
     }
   };
 
-  // Sync data with Supabase (mock cloud sync)
+  // Sincronizzazione bidirezionale (Push/Pull) reale con Supabase
   const syncData = async (): Promise<void> => {
-    if (!supabaseConfig.connected) {
-      throw new Error('Supabase non è configurato o connesso.');
+    if (!supabaseConfig.url || !supabaseConfig.anonKey) {
+      throw new Error('Supabase non è configurato.');
     }
-    // Simulate API network call delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    console.log('Syncing database tables with Supabase...');
-    // In a real application, we would use:
-    // const { error } = await supabase.from('schedules').upsert(schedule);
-    // and similarly for operators and shifts.
+    
+    const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+
+    // 1. Legge lo stato sul cloud
+    const { data: cloudOps, error: errOps } = await supabase.from('operators').select('*');
+    if (errOps) {
+      if (errOps.code === '42P01') {
+        throw new Error("Le tabelle non esistono ancora in Supabase. Per favore, esegui lo script SQL fornito nelle istruzioni prima di procedere.");
+      }
+      throw new Error(`Errore di connessione Supabase: ${errOps.message}`);
+    }
+
+    // 2. Se il cloud è vuoto (nessun operatore salvato), invia (PUSH) i dati locali correnti
+    if (!cloudOps || cloudOps.length === 0) {
+      await supabase.from('operators').upsert(operators);
+      await supabase.from('shifts').upsert(shifts);
+      if (schedule.length > 0) {
+        await supabase.from('schedule').upsert(schedule);
+      }
+      return;
+    }
+
+    // 3. Se il cloud contiene dati, esegui l'unione (UPSERT locale -> cloud e poi PULL cloud -> locale)
+    await supabase.from('operators').upsert(operators);
+    await supabase.from('shifts').upsert(shifts);
+    if (schedule.length > 0) {
+      await supabase.from('schedule').upsert(schedule);
+    }
+
+    // Riscarica i dati finali consolidati
+    const { data: finalOps } = await supabase.from('operators').select('*');
+    const { data: finalShifts } = await supabase.from('shifts').select('*');
+    const { data: finalSchedule } = await supabase.from('schedule').select('*');
+
+    if (finalOps && finalOps.length > 0) {
+      setOperators(finalOps);
+      localStorage.setItem('tsrm_operators', JSON.stringify(finalOps));
+    }
+    if (finalShifts && finalShifts.length > 0) {
+      setShifts(finalShifts);
+      localStorage.setItem('tsrm_shifts', JSON.stringify(finalShifts));
+    }
+    if (finalSchedule) {
+      setSchedule(finalSchedule);
+      localStorage.setItem('tsrm_schedule', JSON.stringify(finalSchedule));
+    }
   };
+
+  // Debounced Auto-Sync in background (attivo solo se connesso)
+  useEffect(() => {
+    if (!supabaseConfig.connected || !supabaseConfig.url || !supabaseConfig.anonKey) return;
+
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+        await supabase.from('operators').upsert(operators);
+        await supabase.from('shifts').upsert(shifts);
+        if (schedule.length > 0) {
+          await supabase.from('schedule').upsert(schedule);
+        }
+        console.log('Salvataggio automatico cloud completato con successo.');
+      } catch (e) {
+        console.error('Errore salvataggio automatico cloud:', e);
+      }
+    }, 2500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [operators, shifts, schedule, supabaseConfig.connected]);
 
   const resetDatabase = () => {
     localStorage.removeItem('tsrm_operators');
