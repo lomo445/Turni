@@ -534,7 +534,7 @@ export const CalendarView: React.FC = () => {
         <div className="flex-1 overflow-auto p-6 min-w-0 min-h-0">
           
           {/* Empty state Call To Action */}
-          {workedShiftsCount === 0 && !loading && (
+          {workedShiftsCount === 0 && !loading && userRole === 'coordinatore' && (
             <div className="mb-6 p-6 bg-sky-50 border border-sky-200 rounded-2xl flex flex-col md:flex-row items-center justify-between no-print gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
               <div className="flex items-center space-x-3 text-left">
                 <div className="p-3 bg-sky-100 text-sky-600 rounded-full">

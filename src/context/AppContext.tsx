@@ -581,6 +581,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSchedule(sched);
       localStorage.setItem('tsrm_schedule', JSON.stringify(sched));
     }
+    setActiveView('calendario');
   };
 
   const logout = async (): Promise<void> => {

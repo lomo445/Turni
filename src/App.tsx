@@ -15,7 +15,8 @@ import { RefreshCw, Activity, Wrench } from 'lucide-react';
 declare const __BUILD_TIME__: number;
 
 const MainLayout: React.FC = () => {
-  const { activeView } = useApp();
+  const { activeView, userRole } = useApp();
+  const isCoordinatore = userRole === 'coordinatore';
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-900 font-sans">
@@ -24,13 +25,13 @@ const MainLayout: React.FC = () => {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
-        {activeView === 'dashboard' && <Dashboard />}
+        {activeView === 'dashboard' && isCoordinatore && <Dashboard />}
         {activeView === 'calendario' && <CalendarView />}
-        {activeView === 'operatori' && <OperatorManager />}
-        {activeView === 'generazione' && <AutomaticGenerator />}
-        {activeView === 'statistiche' && <StatsDashboard />}
-        {activeView === 'importa' && <ExcelImporter />}
-        {activeView === 'impostazioni' && <LegendManager />}
+        {activeView === 'operatori' && isCoordinatore && <OperatorManager />}
+        {activeView === 'generazione' && isCoordinatore && <AutomaticGenerator />}
+        {activeView === 'statistiche' && isCoordinatore && <StatsDashboard />}
+        {activeView === 'importa' && isCoordinatore && <ExcelImporter />}
+        {activeView === 'impostazioni' && isCoordinatore && <LegendManager />}
       </main>
     </div>
   );

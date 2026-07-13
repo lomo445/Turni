@@ -49,7 +49,7 @@ export const Sidebar: React.FC = () => {
 
   const menuItems = rawMenuItems.filter(item => {
     if (userRole === 'operatore') {
-      return ['dashboard', 'calendario', 'statistiche'].includes(item.id);
+      return ['calendario'].includes(item.id);
     }
     return true;
   });
