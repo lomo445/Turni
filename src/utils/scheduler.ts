@@ -65,31 +65,35 @@ export function generateSchedule(
   // 1. Assegnazione Statica degli Offset basata sulla "Data Epoca" (1 Agosto 2026)
   const EPOCH_DATE = new Date(2026, 7, 1); // 1 Agosto 2026 (Mese 7 in zero-based Date)
   
-  // Mappatura hardcoded degli offset per i 15 operatori base in base alle terzine
+  // Mappatura hardcoded degli offset esatti (0-14, tutti univoci) per il 1 Agosto 2026
   const OPERATOR_EPOCH_OFFSETS: Record<string, number> = {
-    // Terzina 1
-    'fedeli': 5,
+    // Terzina 1 (0, 5, 10)
+    'fedeli': 0,
+    'ferrante': 5,
     'guerrini g': 10,
     'guerrini g.': 10,
-    'ferrante': 0,
-    // Terzina 2
+    
+    // Terzina 2 (4, 9, 14)
     'tenti': 4,
     'donati': 9,
     'guerrini s': 14,
     'guerrini s.': 14,
-    // Terzina 3
+    
+    // Terzina 3 (3, 8, 13)
     'peruzzi': 3,
-    'morano': 8,
-    'testi': 13,
-    // Terzina 4
-    'arrais': 7,
-    'mondanelli': 12,
-    'mancini': 2,
-    // Terzina 5
-    'degl\'innocenti': 6,
-    'degl innocenti': 6,
-    'camisa': 11,
-    'gattari': 1
+    'testi': 8,
+    'morano': 13,
+    
+    // Terzina 4 (2, 7, 12)
+    'mondanelli': 2,
+    'mancini': 7,
+    'arrais': 12,
+    
+    // Terzina 5 (1, 6, 11)
+    'degl\'innocenti': 1,
+    'degl innocenti': 1,
+    'gattari': 6,
+    'camisa': 11
   };
 
   const targetDate = new Date(year, month - 1, 1);
