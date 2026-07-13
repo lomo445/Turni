@@ -52,7 +52,7 @@ Codici Turno disponibili: ${JSON.stringify(contextData.shifts.map(s => s.codice)
 Calendario Attuale: ${JSON.stringify(contextData.schedule.map(s => ({ opId: s.operatoreId, date: s.data, code: s.codiceTurno })))}
 `;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
   const payload = {
     system_instruction: {
@@ -81,7 +81,14 @@ Calendario Attuale: ${JSON.stringify(contextData.schedule.map(s => ({ opId: s.op
   if (!response.ok) {
     const errText = await response.text();
     console.error("Gemini API Error:", errText);
-    throw new Error(`Errore API Gemini: ${response.statusText}`);
+    let errorDetails = response.statusText;
+    try {
+      const parsedErr = JSON.parse(errText);
+      if (parsedErr.error && parsedErr.error.message) {
+        errorDetails = parsedErr.error.message;
+      }
+    } catch (e) {}
+    throw new Error(`Errore API Gemini: ${errorDetails}`);
   }
 
   const data = await response.json();
