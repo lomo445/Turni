@@ -32,6 +32,7 @@ export function generateSchedule(
   fullHistory?: DailySchedule[]
 ): { schedule: DailySchedule[]; errors: GenerationError[] } {
   if (fullHistory) { /* ignore to prevent TS error */ }
+  if (previousSchedule) { /* ignore to prevent TS error */ }
 
   const numDays = new Date(year, month, 0).getDate();
   const activeOperators = operators.filter(o => o.stato === 'attivo').sort((a, b) => a.cognome.localeCompare(b.cognome));
@@ -61,62 +62,58 @@ export function generateSchedule(
   // Il ciclo base di 15 giorni richiesto dal coordinatore
   const CYCLE = ['P', 'M', 'N', 'L', 'L', 'P', 'M', 'N', 'L', 'L', 'J', 'J', 'J', 'J', 'J'];
 
-  // 1. Deducere gli Offset dallo storico precedente (auto-sync con il file Excel)
-  const opHistory: Record<string, {date: string, code: string, cat: string}[]> = {};
-  activeOperators.forEach(op => opHistory[op.id] = []);
+  // 1. Assegnazione Statica degli Offset basata sulla "Data Epoca" (1 Agosto 2026)
+  const EPOCH_DATE = new Date(2026, 7, 1); // 1 Agosto 2026 (Mese 7 in zero-based Date)
   
-  if (previousSchedule && previousSchedule.length > 0) {
-    [...previousSchedule].sort((a, b) => a.data.localeCompare(b.data)).forEach(s => {
-      if (opHistory[s.operatoreId]) {
-        opHistory[s.operatoreId].push({ date: s.data, code: s.codiceTurno, cat: getShiftCategory(s.codiceTurno) });
-      }
-    });
-  }
+  // Mappatura hardcoded degli offset per i 15 operatori base in base alle terzine
+  const OPERATOR_EPOCH_OFFSETS: Record<string, number> = {
+    // Terzina 1
+    'fedeli': 2,
+    'guerrini g': 7,
+    'guerrini g.': 7,
+    'ferrante': 12,
+    // Terzina 2
+    'tenti': 1,
+    'donati': 6,
+    'guerrini s': 11,
+    'guerrini s.': 11,
+    // Terzina 3
+    'peruzzi': 0,
+    'morano': 5,
+    'testi': 10,
+    // Terzina 4
+    'arrais': 4,
+    'mondanelli': 9,
+    'mancini': 14,
+    // Terzina 5
+    'degl\'innocenti': 3,
+    'degl innocenti': 3,
+    'camisa': 8,
+    'gattari': 13
+  };
+
+  const targetDate = new Date(year, month - 1, 1);
+  const diffTime = targetDate.getTime() - EPOCH_DATE.getTime();
+  const daysSinceEpoch = Math.round(diffTime / (1000 * 3600 * 24));
 
   const offsets: Record<string, number> = {};
   const unassignedOps: string[] = [];
-  const targetDate = new Date(year, month - 1, 1);
 
   activeOperators.forEach(op => {
-    const hist = opHistory[op.id];
-    let detectedOffset = -1;
+    // Normalizziamo il cognome per trovarlo nella mappa
+    const cognomeNorm = op.cognome.toLowerCase().trim();
     
-    if (hist && hist.length > 0) {
-      // Cerchiamo l'ultima notte nello storico per sincronizzare la ruota
-      for (let i = hist.length - 1; i >= 0; i--) {
-        if (hist[i].cat === 'notte') {
-          const nDate = new Date(hist[i].date);
-          const diffTime = targetDate.getTime() - nDate.getTime();
-          const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
-          
-          if (diffDays <= 0) continue; // Ignora turni futuri
-
-          let isFirstN = false;
-          // Controlliamo se 5 giorni prima c'era un'altra notte per capire se è la prima (index 2) o la seconda (index 7)
-          for (let j = i - 1; j >= Math.max(0, i - 15); j--) {
-             if (hist[j].cat === 'notte') {
-                 const priorDate = new Date(hist[j].date);
-                 const daysBetween = Math.round((nDate.getTime() - priorDate.getTime()) / (1000*3600*24));
-                 if (daysBetween === 5) {
-                     isFirstN = false; // È la seconda
-                     break;
-                 } else if (daysBetween === 10 || daysBetween === 11) {
-                     isFirstN = true; // È la prima
-                     break;
-                 }
-             }
-          }
-          
-          // Se non lo capiamo, presumiamo sia la seconda (index 7)
-          const cycleIndexOfN = isFirstN ? 2 : 7;
-          detectedOffset = (cycleIndexOfN + diffDays) % 15;
-          break;
-        }
-      }
+    // Cerca una corrispondenza parziale se non trova quella esatta
+    let epochOffset = OPERATOR_EPOCH_OFFSETS[cognomeNorm];
+    if (epochOffset === undefined) {
+      const match = Object.keys(OPERATOR_EPOCH_OFFSETS).find(k => cognomeNorm.includes(k));
+      if (match) epochOffset = OPERATOR_EPOCH_OFFSETS[match];
     }
-    
-    if (detectedOffset >= 0) {
-      offsets[op.id] = detectedOffset;
+
+    if (epochOffset !== undefined) {
+      // Calcola l'offset relativo al primo giorno del mese target
+      // Aggiungiamo 1500000 per gestire i numeri negativi (mesi precedenti all'epoca)
+      offsets[op.id] = (epochOffset + daysSinceEpoch + 1500000) % 15;
     } else {
       unassignedOps.push(op.id);
     }
