@@ -359,19 +359,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 2. Se il cloud è vuoto (nessun operatore salvato), invia (PUSH) i dati locali correnti
     if (!cloudOps || cloudOps.length === 0) {
-      await supabase.from('operators').upsert(operators);
-      await supabase.from('shifts').upsert(shifts);
+      const { error: opErr } = await supabase.from('operators').upsert(operators);
+      if (opErr) throw new Error(`Errore caricamento operatori: ${opErr.message}`);
+      
+      const { error: shErr } = await supabase.from('shifts').upsert(shifts);
+      if (shErr) throw new Error(`Errore caricamento turni: ${shErr.message}`);
+      
       if (schedule.length > 0) {
-        await supabase.from('schedule').upsert(schedule);
+        const { error: scErr } = await supabase.from('schedule').upsert(schedule);
+        if (scErr) throw new Error(`Errore caricamento calendario: ${scErr.message}`);
       }
       return;
     }
 
     // 3. Se il cloud contiene dati, esegui l'unione (UPSERT locale -> cloud e poi PULL cloud -> locale)
-    await supabase.from('operators').upsert(operators);
-    await supabase.from('shifts').upsert(shifts);
+    const { error: opErr } = await supabase.from('operators').upsert(operators);
+    if (opErr) throw new Error(`Errore sincronizzazione operatori: ${opErr.message}`);
+
+    const { error: shErr } = await supabase.from('shifts').upsert(shifts);
+    if (shErr) throw new Error(`Errore sincronizzazione turni: ${shErr.message}`);
+
     if (schedule.length > 0) {
-      await supabase.from('schedule').upsert(schedule);
+      const { error: scErr } = await supabase.from('schedule').upsert(schedule);
+      if (scErr) throw new Error(`Errore sincronizzazione calendario: ${scErr.message}`);
     }
 
     // Riscarica i dati finali consolidati
