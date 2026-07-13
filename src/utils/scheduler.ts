@@ -65,35 +65,35 @@ export function generateSchedule(
   // 1. Assegnazione Statica degli Offset basata sulla "Data Epoca" (1 Agosto 2026)
   const EPOCH_DATE = new Date(2026, 7, 1); // 1 Agosto 2026 (Mese 7 in zero-based Date)
   
-  // Mappatura hardcoded degli offset esatti (0-14, tutti univoci) per il 1 Agosto 2026
+  // Mappatura hardcoded degli offset esatti per il 1 Agosto 2026
   const OPERATOR_EPOCH_OFFSETS: Record<string, number> = {
-    // Terzina 1 (0, 5, 10)
-    'fedeli': 0,
-    'ferrante': 5,
+    // Terzina 1 (5, 0, 10)
+    'fedeli': 5,
+    'ferrante': 0,
     'guerrini g': 10,
     'guerrini g.': 10,
     
-    // Terzina 2 (4, 9, 14)
+    // Terzina 2 (4, 9, 14) - se Tenti è 4
     'tenti': 4,
     'donati': 9,
     'guerrini s': 14,
     'guerrini s.': 14,
     
-    // Terzina 3 (3, 8, 13)
+    // Terzina 3 (3, 8, 13) - se Peruzzi è 3
     'peruzzi': 3,
     'testi': 8,
     'morano': 13,
     
-    // Terzina 4 (2, 7, 12)
+    // Terzina 4 (2, 7, 12) - se Mondanelli è 2
     'mondanelli': 2,
     'mancini': 7,
     'arrais': 12,
     
-    // Terzina 5 (1, 6, 11)
-    'degl\'innocenti': 1,
-    'degl innocenti': 1,
-    'gattari': 6,
-    'camisa': 11
+    // Terzina 5 (1, 6, 11) - se Degl'innocenti è 6 (o 1? aspetta, Degl era 6 e Gattari 1 nel fix originale)
+    'degl\'innocenti': 6,
+    'degl innocenti': 6,
+    'camisa': 11,
+    'gattari': 1
   };
 
   const targetDate = new Date(year, month - 1, 1);
@@ -213,41 +213,11 @@ export function generateSchedule(
       return hours[a] - hours[b]; // Priorità a chi ha meno ore
     });
 
-    // 2c. Copertura delle mancanze con i Jolly
-    // Notti
-    while (nNeeded > 0 && jollies.length > 0) {
-      const opId = jollies.shift()!;
-      const codes = ['N1', 'N2'];
-      const assignedCode = codes.find(c => !Object.values(dayAssignments).includes(c)) || 'N1';
-      dayAssignments[opId] = assignedCode;
-      nNeeded--;
-      hours[opId] += 11;
-      if (isFestivo) weekends[opId]++;
-    }
-
-    // Pomeriggi
-    while (pNeeded > 0 && jollies.length > 0) {
-      const opId = jollies.shift()!;
-      const codes = isFestivo ? ['P1', 'P2'] : ['P1', 'P2', 'P3'];
-      const assignedCode = codes.find(c => !Object.values(dayAssignments).includes(c)) || 'P1';
-      dayAssignments[opId] = assignedCode;
-      pNeeded--;
-      hours[opId] += 6.5;
-      if (isFestivo) weekends[opId]++;
-    }
-
-    // Mattine
-    while (mNeeded > 0 && jollies.length > 0) {
-      const opId = jollies.shift()!;
-      const codes = isFestivo ? ['M1', 'M2'] : ['M1', 'M2', 'M3'];
-      const assignedCode = codes.find(c => !Object.values(dayAssignments).includes(c)) || 'M1';
-      dayAssignments[opId] = assignedCode;
-      mNeeded--;
-      hours[opId] += 6.5;
-      if (isFestivo) weekends[opId]++;
-    }
-
-    // I Jolly rimanenti vanno a Riposo
+    // 2c. Preservazione del "Turno Nudo"
+    // Come richiesto, i Jolly (giorni vuoti nel ciclo di 15) non vengono usati per
+    // tappare automaticamente i buchi (Mattine o Pomeriggi mancanti), ma vengono
+    // lasciati a Riposo (L) in modo che il coordinatore possa assegnarli manualmente
+    // agli "altri" o smistarli secondo necessità.
     jollies.forEach(opId => {
       dayAssignments[opId] = 'L';
     });
