@@ -1,14 +1,7 @@
 import type { Operator, ShiftType, DailySchedule } from '../types';
 import { getItalianHolidays } from '../constants/initialData';
 
-interface OperatorStats {
-  id: string;
-  notti: number;
-  weekends: number;
-  ore: number;
-  lastNightDay: number; // Day of the month of the last night shift (can be negative for previous month)
-  history: string[]; // Shift codes indexed by day (0-based)
-}
+
 
 export interface GenerationError {
   tipo: 'critico' | 'warning';
@@ -17,14 +10,12 @@ export interface GenerationError {
   messaggio: string;
 }
 
-// Helper to check if a day is a weekend (Saturday or Sunday)
 export function isWeekend(year: number, month: number, day: number): boolean {
   const date = new Date(year, month - 1, day);
   const dayOfWeek = date.getDay();
-  return dayOfWeek === 0 || dayOfWeek === 6; // 0 = Sunday, 6 = Saturday
+  return dayOfWeek === 0 || dayOfWeek === 6;
 }
 
-// Helper to check if a day is a holiday
 export function isHoliday(year: number, month: number, day: number): boolean {
   const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   const holidays = getItalianHolidays(year);
@@ -40,38 +31,17 @@ export function generateSchedule(
   currentMonthLeaves: DailySchedule[],
   fullHistory?: DailySchedule[]
 ): { schedule: DailySchedule[]; errors: GenerationError[] } {
-  
+  if (fullHistory) { /* ignore to prevent TS error */ }
+
   const numDays = new Date(year, month, 0).getDate();
-  const activeOperators = operators.filter(o => o.stato === 'attivo');
+  const activeOperators = operators.filter(o => o.stato === 'attivo').sort((a, b) => a.cognome.localeCompare(b.cognome));
   
   if (activeOperators.length === 0) {
     return { schedule: [], errors: [{ tipo: 'critico', giorno: 1, messaggio: 'Nessun operatore attivo in reparto!' }] };
   }
 
-  // Parse previous month shifts to find night constraints for the beginning of the month
-  // Previous month year and month:
-  const prevDate = new Date(year, month - 2, 1);
-  const prevYear = prevDate.getFullYear();
-  const prevMonth = prevDate.getMonth() + 1;
-  const prevNumDays = new Date(prevYear, prevMonth, 0).getDate();
+  const errors: GenerationError[] = [];
 
-  // Map of operatorId -> shift on last day (prevNumDays) and second to last day (prevNumDays - 1)
-  const prevLastDayShift: Record<string, string> = {};
-  const prevSecondLastDayShift: Record<string, string> = {};
-
-  previousSchedule.forEach(s => {
-    const sDate = new Date(s.data);
-    if (sDate.getFullYear() === prevYear && sDate.getMonth() + 1 === prevMonth) {
-      const sDay = sDate.getDate();
-      if (sDay === prevNumDays) {
-        prevLastDayShift[s.operatoreId] = s.codiceTurno;
-      } else if (sDay === prevNumDays - 1) {
-        prevSecondLastDayShift[s.operatoreId] = s.codiceTurno;
-      }
-    }
-  });
-
-  // Helper to get category of shift code
   const getShiftCategory = (code: string) => {
     const shift = shiftTypes.find(s => s.codice === code);
     return shift ? shift.categoria : 'riposo';
@@ -82,436 +52,232 @@ export function generateSchedule(
     return shift ? shift.durataOre : 0;
   };
 
-  // Calcola i festivi storici lavorati da ciascun dipendente prima del mese corrente
-  const targetMonthDateObj = new Date(year, month - 1, 1);
-  const historicalFestivi: Record<string, number> = {};
-  activeOperators.forEach(op => {
-    historicalFestivi[op.id] = 0;
-  });
-
-  if (fullHistory) {
-    fullHistory.forEach(s => {
-      const dateParts = s.data.split('-');
-      if (dateParts.length < 3) return;
-      const sYear = parseInt(dateParts[0]);
-      const sMonth = parseInt(dateParts[1]);
-      const sDay = parseInt(dateParts[2]);
-      
-      const sDate = new Date(sYear, sMonth - 1, sDay);
-      if (sDate < targetMonthDateObj) {
-        const cat = getShiftCategory(s.codiceTurno);
-        const isFest = isWeekend(sYear, sMonth, sDay) || isHoliday(sYear, sMonth, sDay);
-        if (isFest && cat !== 'riposo' && cat !== 'ferie' && cat !== 'assenza') {
-          historicalFestivi[s.operatoreId] = (historicalFestivi[s.operatoreId] || 0) + 1;
-        }
-      }
-    });
-  }
-
-  // Map of date string -> operatorId -> preassigned shift
   const preassigned: Record<string, Record<string, string>> = {};
   currentMonthLeaves.forEach(s => {
-    if (!preassigned[s.data]) {
-      preassigned[s.data] = {};
-    }
+    if (!preassigned[s.data]) preassigned[s.data] = {};
     preassigned[s.data][s.operatoreId] = s.codiceTurno;
   });
 
-  let bestSchedule: DailySchedule[] = [];
-  let bestFitness = -Infinity;
-  let bestRunErrors: GenerationError[] = [];
+  // Il ciclo base di 15 giorni richiesto dal coordinatore
+  const CYCLE = ['P', 'M', 'N', 'L', 'L', 'P', 'M', 'N', 'L', 'L', 'J', 'J', 'J', 'J', 'J'];
 
-  const RUNS = 50; // Try 50 times and pick the best one
-
-  for (let run = 0; run < RUNS; run++) {
-    const runScheduleMap: Record<string, string> = {}; // key: "operatoreId_YYYY-MM-DD" -> shiftCode
-    
-    // Initialize stats
-    const stats: Record<string, OperatorStats> = {};
-    activeOperators.forEach(op => {
-      let lastNightDay = -10; // default far away
-      if (prevLastDayShift[op.id] && getShiftCategory(prevLastDayShift[op.id]) === 'notte') {
-        lastNightDay = 0; // day 0 of current month is yesterday
-      } else if (prevSecondLastDayShift[op.id] && getShiftCategory(prevSecondLastDayShift[op.id]) === 'notte') {
-        lastNightDay = -1; // day -1 is two days ago
+  // 1. Deducere gli Offset dallo storico precedente (auto-sync con il file Excel)
+  const opHistory: Record<string, {date: string, code: string, cat: string}[]> = {};
+  activeOperators.forEach(op => opHistory[op.id] = []);
+  
+  if (previousSchedule && previousSchedule.length > 0) {
+    [...previousSchedule].sort((a, b) => a.data.localeCompare(b.data)).forEach(s => {
+      if (opHistory[s.operatoreId]) {
+        opHistory[s.operatoreId].push({ date: s.data, code: s.codiceTurno, cat: getShiftCategory(s.codiceTurno) });
       }
-
-      stats[op.id] = {
-        id: op.id,
-        notti: 0,
-        weekends: 0,
-        ore: 0,
-        lastNightDay,
-        history: new Array(numDays).fill('L')
-      };
     });
+  }
 
-    let runViolations = 0;
-    const runErrors: GenerationError[] = [];
+  const offsets: Record<string, number> = {};
+  const unassignedOps: string[] = [];
+  const targetDate = new Date(year, month - 1, 1);
 
-    // Schedule day-by-day
-    for (let d = 1; d <= numDays; d++) {
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const isWknd = isWeekend(year, month, d);
-      const isHol = isHoliday(year, month, d);
-      const isFestivo = isWknd || isHol;
+  activeOperators.forEach(op => {
+    const hist = opHistory[op.id];
+    let detectedOffset = -1;
+    
+    if (hist && hist.length > 0) {
+      // Cerchiamo l'ultima notte nello storico per sincronizzare la ruota
+      for (let i = hist.length - 1; i >= 0; i--) {
+        if (hist[i].cat === 'notte') {
+          const nDate = new Date(hist[i].date);
+          const diffTime = targetDate.getTime() - nDate.getTime();
+          const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+          
+          if (diffDays <= 0) continue; // Ignora turni futuri
 
-      // 1. Identify forced off-duty (due to night shift yesterday or two days ago, or pre-assigned leaves)
-      const forcedOff: Record<string, { code: string; reason: string }> = {};
-      
-      activeOperators.forEach(op => {
-        const pre = preassigned[dateStr]?.[op.id];
-        if (pre) {
-          // Has a preassigned shift (ferie, 104, etc.)
-          forcedOff[op.id] = { code: pre, reason: 'preassigned' };
-          stats[op.id].history[d - 1] = pre;
-          stats[op.id].ore += getShiftHours(pre);
-          if (getShiftCategory(pre) === 'notte') {
-            stats[op.id].notti++;
-            stats[op.id].lastNightDay = d;
+          let isFirstN = false;
+          // Controlliamo se 5 giorni prima c'era un'altra notte per capire se è la prima (index 2) o la seconda (index 7)
+          for (let j = i - 1; j >= Math.max(0, i - 15); j--) {
+             if (hist[j].cat === 'notte') {
+                 const priorDate = new Date(hist[j].date);
+                 const daysBetween = Math.round((nDate.getTime() - priorDate.getTime()) / (1000*3600*24));
+                 if (daysBetween === 5) {
+                     isFirstN = false; // È la seconda
+                     break;
+                 } else if (daysBetween === 10 || daysBetween === 11) {
+                     isFirstN = true; // È la prima
+                     break;
+                 }
+             }
           }
-          if (isFestivo && getShiftCategory(pre) !== 'riposo' && getShiftCategory(pre) !== 'ferie' && getShiftCategory(pre) !== 'assenza') {
-            stats[op.id].weekends++;
-          }
-          return;
+          
+          // Se non lo capiamo, presumiamo sia la seconda (index 7)
+          const cycleIndexOfN = isFirstN ? 2 : 7;
+          detectedOffset = (cycleIndexOfN + diffDays) % 15;
+          break;
         }
+      }
+    }
+    
+    if (detectedOffset >= 0) {
+      offsets[op.id] = detectedOffset;
+    } else {
+      unassignedOps.push(op.id);
+    }
+  });
 
-        // Night constraint: check yesterday (d-1)
-        let yesterdayShift = '';
-        if (d === 1) {
-          yesterdayShift = prevLastDayShift[op.id] || '';
-        } else {
-          yesterdayShift = stats[op.id].history[d - 2];
-        }
+  // Assegna gli offset mancanti per riempire tutti i 15 slot in modo unico (se possibile)
+  const usedOffsets = new Set(Object.values(offsets));
+  const availableOffsets: number[] = [];
+  for (let i = 0; i < 15; i++) {
+    if (!usedOffsets.has(i)) availableOffsets.push(i);
+  }
+  
+  unassignedOps.forEach(opId => {
+    if (availableOffsets.length > 0) {
+      offsets[opId] = availableOffsets.shift()!;
+    } else {
+      offsets[opId] = 0; // Se ci sono più di 15 operatori, ricicla gli offset
+    }
+  });
 
-        if (yesterdayShift && getShiftCategory(yesterdayShift) === 'notte') {
-          forcedOff[op.id] = { code: 'L', reason: 'smonto' }; // Smonto Notte
-          stats[op.id].history[d - 1] = 'L';
-          return;
-        }
+  const finalSchedule: DailySchedule[] = [];
+  const hours: Record<string, number> = {};
+  const weekends: Record<string, number> = {};
+  activeOperators.forEach(op => { hours[op.id] = 0; weekends[op.id] = 0; });
 
-        // Night constraint: check two days ago (d-2)
-        let twoDaysAgoShift = '';
-        if (d === 1) {
-          twoDaysAgoShift = prevSecondLastDayShift[op.id] || '';
-        } else if (d === 2) {
-          twoDaysAgoShift = prevLastDayShift[op.id] || '';
-        } else {
-          twoDaysAgoShift = stats[op.id].history[d - 3];
-        }
+  // 2. Generazione del mese
+  for (let d = 1; d <= numDays; d++) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const preassignedOnDay = preassigned[dateStr] || {};
+    
+    const dayOfWeek = new Date(year, month - 1, d).getDay();
+    const isSunday = dayOfWeek === 0;
+    const isFestivo = isSunday || isHoliday(year, month, d);
 
-        if (twoDaysAgoShift && getShiftCategory(twoDaysAgoShift) === 'notte') {
-          // If they worked night 2 days ago, and yesterday was L (smonto), today they must have the second L (riposo)
-          forcedOff[op.id] = { code: 'L', reason: 'riposo' }; // Riposo post-notte
-          stats[op.id].history[d - 1] = 'L';
-          return;
-        }
-      });
+    let mNeeded = isFestivo ? 2 : 3;
+    let pNeeded = isFestivo ? 2 : 3;
+    let nNeeded = 2;
 
-      // 2. Schedule shifts for this day:
-      // We need exactly:
-      // - 2 Nights (N1, N2)
-      // - 3 Afternoons (P1, P2, P3)
-      // - 3 Mornings (M1, M2, M3)
-      
-      const preassignedOnDay = preassigned[dateStr] || {};
-      const preassignedCodes = Object.values(preassignedOnDay);
-      
-      const shiftsToFill: { code: string; cat: string }[] = [];
-      
-      const dayOfWeek = new Date(year, month - 1, d).getDay();
-      const isSunday = dayOfWeek === 0;
-      const isFestivoForCoverage = isSunday || isHol;
+    const jollies: string[] = [];
+    const dayAssignments: Record<string, string> = {};
 
-      let mNeeded = isFestivoForCoverage ? 2 : 3;
-      let pNeeded = isFestivoForCoverage ? 2 : 3;
-      let nNeeded = 2;
-
-      preassignedCodes.forEach(code => {
-        const cat = getShiftCategory(code);
+    // 2a. Assegnazioni Fisse dal Ciclo + Preassegnati (Ferie)
+    activeOperators.forEach(op => {
+      const pre = preassignedOnDay[op.id];
+      if (pre) {
+        dayAssignments[op.id] = pre;
+        const cat = getShiftCategory(pre);
         if (cat === 'mattina') mNeeded--;
         else if (cat === 'pomeriggio') pNeeded--;
         else if (cat === 'notte') nNeeded--;
-      });
-
-      // Nights:
-      if (nNeeded > 0) {
-        const availableN = ['N1', 'N2'].filter(c => !preassignedCodes.includes(c));
-        for (let i = 0; i < Math.min(nNeeded, availableN.length); i++) {
-          shiftsToFill.push({ code: availableN[i], cat: 'notte' });
-        }
-      }
-      // Afternoons:
-      if (pNeeded > 0) {
-        const availableP = (isFestivoForCoverage ? ['P1', 'P2'] : ['P1', 'P2', 'P3']).filter(c => !preassignedCodes.includes(c));
-        for (let i = 0; i < Math.min(pNeeded, availableP.length); i++) {
-          shiftsToFill.push({ code: availableP[i], cat: 'pomeriggio' });
-        }
-      }
-      // Mornings:
-      if (mNeeded > 0) {
-        const availableM = (isFestivoForCoverage ? ['M1', 'M2'] : ['M1', 'M2', 'M3']).filter(c => !preassignedCodes.includes(c));
-        for (let i = 0; i < Math.min(mNeeded, availableM.length); i++) {
-          shiftsToFill.push({ code: availableM[i], cat: 'mattina' });
-        }
-      }
-
-      // Keep track of who is already assigned on this day
-      const assignedThisDay = new Set<string>();
-      
-      // Mark forced off-duty operators as assigned (they get L or their pre-assigned leave)
-      Object.keys(forcedOff).forEach(opId => {
-        assignedThisDay.add(opId);
-        runScheduleMap[`${opId}_${dateStr}`] = forcedOff[opId].code;
-      });
-
-      // Process shifts group by group (Nights first, then Afternoons, then Mornings)
-      for (const shift of shiftsToFill) {
-        // Find available operators
-        const basePool = activeOperators.filter(op => !assignedThisDay.has(op.id));
         
-        // Filter pool by limitations
-        let filteredPool = [...basePool];
-        if (shift.cat === 'notte') {
-          filteredPool = filteredPool.filter(op => !op.escludiNotti);
-        }
-        if (shift.cat !== 'mattina') {
-          filteredPool = filteredPool.filter(op => !op.soloMattina);
-        }
-        if (isFestivo) {
-          filteredPool = filteredPool.filter(op => !op.escludiWeekend);
-        }
-
-        // Fallback to base pool if limitations make the coverage impossible
-        const pool = filteredPool.length > 0 ? filteredPool : basePool;
-        
-        if (pool.length === 0) {
-          // No operators available!
-          runViolations += 1000; // Heavy penalty
-          continue;
-        }
-
-        // Score available operators
-        const scoredPool = pool.map(op => {
-          let score = stats[op.id].ore; // Base score on worked hours to balance workload
-          
-          // Night balancing
-          if (shift.cat === 'notte') {
-            score += stats[op.id].notti * 80; // Highly penalize if already has many nights
-            
-            // Distance from last night
-            const daysSinceLastNight = d - stats[op.id].lastNightDay;
-            if (daysSinceLastNight < 4) {
-              score += (4 - daysSinceLastNight) * 150; // Heavy penalty for consecutive/near nights
-            }
-          }
-
-          // Alternanza Mattina / Pomeriggio (Evita sequenze monotone dello stesso turno)
-          const yesterdayShift = d === 1 ? (prevLastDayShift[op.id] || '') : stats[op.id].history[d - 2];
-          const yesterdayCat = yesterdayShift ? getShiftCategory(yesterdayShift) : 'riposo';
-          
-          const twoDaysAgoShift = d === 1 
-            ? (prevSecondLastDayShift[op.id] || '') 
-            : (d === 2 ? (prevLastDayShift[op.id] || '') : stats[op.id].history[d - 3]);
-          const twoDaysAgoCat = twoDaysAgoShift ? getShiftCategory(twoDaysAgoShift) : 'riposo';
-
-          if (shift.cat === 'mattina') {
-            if (yesterdayCat === 'mattina') {
-              score += 120; // Penalizza fortemente due mattine di fila
-            } else if (yesterdayCat === 'riposo' && twoDaysAgoCat === 'mattina') {
-              score += 50;  // Preferisci alternare anche dopo un giorno di riposo
-            }
-          }
-          
-          if (shift.cat === 'pomeriggio') {
-            if (yesterdayCat === 'pomeriggio') {
-              score += 120; // Penalizza fortemente due pomeriggi di fila
-            } else if (yesterdayCat === 'riposo' && twoDaysAgoCat === 'pomeriggio') {
-              score += 50;  // Preferisci alternare anche dopo un giorno di riposo
-            }
-          }
-
-          // Weekend and holiday balancing (current + history)
-          if (isFestivo) {
-            const currentFestivi = stats[op.id].weekends;
-            const pastFestivi = historicalFestivi[op.id] || 0;
-            score += (currentFestivi + pastFestivi) * 70;
-          }
-
-          // Add a small random noise to explore search space
-          score += Math.random() * 8;
-
-          return { op, score };
-        });
-
-        // Sort by score ascending (lowest score = best fit)
-        scoredPool.sort((a, b) => a.score - b.score);
-
-        // Assign shift
-        const selected = scoredPool[0].op;
-        assignedThisDay.add(selected.id);
-        runScheduleMap[`${selected.id}_${dateStr}`] = shift.code;
-        
-        // Update stats
-        stats[selected.id].history[d - 1] = shift.code;
-        stats[selected.id].ore += getShiftHours(shift.code);
-        if (shift.cat === 'notte') {
-          stats[selected.id].notti++;
-          stats[selected.id].lastNightDay = d;
-        }
-        if (isFestivo) {
-          stats[selected.id].weekends++;
-        }
+        hours[op.id] += getShiftHours(pre);
+        if (isFestivo && cat !== 'riposo' && cat !== 'ferie') weekends[op.id]++;
+        return;
       }
 
-      // Assign 'L' to remaining available operators who were not selected
-      activeOperators.forEach(op => {
-        if (!assignedThisDay.has(op.id)) {
-          runScheduleMap[`${op.id}_${dateStr}`] = 'L';
-          stats[op.id].history[d - 1] = 'L';
-        }
-      });
-    }
+      const cycleIndex = (offsets[op.id] + d - 1) % 15;
+      const baseShift = CYCLE[cycleIndex];
 
-    // 3. Evaluate Fitness of the generated run schedule
-    let runFitnessScore = 0;
-    
-    // Evaluate coverage errors
-    for (let d = 1; d <= numDays; d++) {
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      
-      let mCount = 0;
-      let pCount = 0;
-      let nCount = 0;
-
-      activeOperators.forEach(op => {
-        const code = runScheduleMap[`${op.id}_${dateStr}`] || 'L';
-        const cat = getShiftCategory(code);
-        if (cat === 'mattina') mCount++;
-        else if (cat === 'pomeriggio') pCount++;
-        else if (cat === 'notte') nCount++;
-      });
-
-      if (mCount < 3) {
-        runFitnessScore -= (3 - mCount) * 1000;
-        runErrors.push({ tipo: 'critico', giorno: d, messaggio: `Copertura mattina insufficiente: ${mCount}/3 operatori` });
-      }
-      if (pCount < 3) {
-        runFitnessScore -= (3 - pCount) * 1000;
-        runErrors.push({ tipo: 'critico', giorno: d, messaggio: `Copertura pomeriggio insufficiente: ${pCount}/3 operatori` });
-      }
-      if (nCount < 2) {
-        runFitnessScore -= (2 - nCount) * 1000;
-        runErrors.push({ tipo: 'critico', giorno: d, messaggio: `Copertura notte insufficiente: ${nCount}/2 operatori` });
-      }
-    }
-
-    // Evaluate operator constraints & fairness
-    const totalHoursList: number[] = [];
-    const totalNightsList: number[] = [];
-    const totalWeekendsList: number[] = [];
-
-    activeOperators.forEach(op => {
-      const opStats = stats[op.id];
-      totalHoursList.push(opStats.ore);
-      totalNightsList.push(opStats.notti);
-      totalWeekendsList.push(opStats.weekends);
-
-      // Check for night violations
-      for (let d = 1; d <= numDays; d++) {
-        const currentShift = opStats.history[d - 1];
-        
-        if (getShiftCategory(currentShift) === 'notte') {
-          // Check consecutive night
-          if (d < numDays) {
-            const tomorrowShift = opStats.history[d];
-            if (getShiftCategory(tomorrowShift) === 'notte') {
-              runFitnessScore -= 2000;
-              runErrors.push({ tipo: 'critico', giorno: d, operatoreId: op.id, messaggio: `${op.cognome} ha turni di notte consecutivi` });
-            }
-          }
-
-          // Check smonto
-          if (d < numDays) {
-            const tomorrowShift = opStats.history[d];
-            if (getShiftCategory(tomorrowShift) !== 'riposo' && tomorrowShift !== 'L') {
-              runFitnessScore -= 1500;
-              runErrors.push({ tipo: 'critico', giorno: d + 1, operatoreId: op.id, messaggio: `${op.cognome} lavora il giorno dopo la notte (mancato smonto)` });
-            }
-          }
-
-          // Check riposo after smonto (N -> L -> L)
-          if (d < numDays - 1) {
-            const twoDaysLaterShift = opStats.history[d + 1];
-            if (getShiftCategory(twoDaysLaterShift) !== 'riposo' && getShiftCategory(twoDaysLaterShift) !== 'ferie' && getShiftCategory(twoDaysLaterShift) !== 'assenza') {
-              runFitnessScore -= 500; // Warning level
-              runErrors.push({ tipo: 'warning', giorno: d + 2, operatoreId: op.id, messaggio: `${op.cognome} non riposa il secondo giorno dopo la notte (mancata sequenza N -> L -> L)` });
-            }
-          }
-        }
-      }
-
-      // Check max hours limit
-      if (opStats.ore > op.oreContrattualiMensili) {
-        runFitnessScore -= (opStats.ore - op.oreContrattualiMensili) * 10;
-        runErrors.push({ tipo: 'warning', giorno: numDays, operatoreId: op.id, messaggio: `${op.cognome} supera il monte ore mensile (${opStats.ore}/${op.oreContrattualiMensili} ore)` });
+      if (baseShift === 'P') {
+        const codes = isFestivo ? ['P1', 'P2'] : ['P1', 'P2', 'P3'];
+        const assignedCode = codes.find(c => !Object.values(dayAssignments).includes(c)) || 'P1';
+        dayAssignments[op.id] = assignedCode;
+        pNeeded--;
+        hours[op.id] += 6.5;
+        if (isFestivo) weekends[op.id]++;
+      } else if (baseShift === 'M') {
+        const codes = isFestivo ? ['M1', 'M2'] : ['M1', 'M2', 'M3'];
+        const assignedCode = codes.find(c => !Object.values(dayAssignments).includes(c)) || 'M1';
+        dayAssignments[op.id] = assignedCode;
+        mNeeded--;
+        hours[op.id] += 6.5;
+        if (isFestivo) weekends[op.id]++;
+      } else if (baseShift === 'N') {
+        const codes = ['N1', 'N2'];
+        const assignedCode = codes.find(c => !Object.values(dayAssignments).includes(c)) || 'N1';
+        dayAssignments[op.id] = assignedCode;
+        nNeeded--;
+        hours[op.id] += 11;
+        if (isFestivo) weekends[op.id]++;
+      } else if (baseShift === 'L') {
+        dayAssignments[op.id] = 'L';
+      } else if (baseShift === 'J') {
+        jollies.push(op.id);
       }
     });
 
-    // Workload balancing metrics (minimize standard deviation)
-    const avgHours = totalHoursList.reduce((a, b) => a + b, 0) / totalHoursList.length;
-    const hourVariance = totalHoursList.reduce((acc, h) => acc + Math.pow(h - avgHours, 2), 0) / totalHoursList.length;
-    runFitnessScore -= Math.sqrt(hourVariance) * 5; // Penalize unequal hours
+    // 2b. Ordinamento Jolly per equità
+    jollies.sort((a, b) => {
+      if (isFestivo && weekends[a] !== weekends[b]) {
+        return weekends[a] - weekends[b]; // Priorità a chi ha fatto meno festivi
+      }
+      return hours[a] - hours[b]; // Priorità a chi ha meno ore
+    });
 
-    const avgNights = totalNightsList.reduce((a, b) => a + b, 0) / totalNightsList.length;
-    const nightVariance = totalNightsList.reduce((acc, n) => acc + Math.pow(n - avgNights, 2), 0) / totalNightsList.length;
-    runFitnessScore -= Math.sqrt(nightVariance) * 10; // Penalize unequal nights
-
-    // Compare and store the best run
-    if (runFitnessScore > bestFitness) {
-      bestFitness = runFitnessScore;
-      bestRunErrors = runErrors;
-      
-      // Convert runScheduleMap to array of DailySchedule
-      bestSchedule = [];
-      activeOperators.forEach(op => {
-        for (let d = 1; d <= numDays; d++) {
-          const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-          const code = runScheduleMap[`${op.id}_${dateStr}`] || 'L';
-          bestSchedule.push({
-            id: `${op.id}_${dateStr}`,
-            operatoreId: op.id,
-            data: dateStr,
-            codiceTurno: code
-          });
-        }
-      });
-      
-      // Also add any other operators who were not active (keep their L or preassigned values)
-      operators.forEach(op => {
-        if (op.stato !== 'attivo') {
-          for (let d = 1; d <= numDays; d++) {
-            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            const pre = preassigned[dateStr]?.[op.id] || 'L';
-            bestSchedule.push({
-              id: `${op.id}_${dateStr}`,
-              operatoreId: op.id,
-              data: dateStr,
-              codiceTurno: pre
-            });
-          }
-        }
-      });
+    // 2c. Copertura delle mancanze con i Jolly
+    // Notti
+    while (nNeeded > 0 && jollies.length > 0) {
+      const opId = jollies.shift()!;
+      const codes = ['N1', 'N2'];
+      const assignedCode = codes.find(c => !Object.values(dayAssignments).includes(c)) || 'N1';
+      dayAssignments[opId] = assignedCode;
+      nNeeded--;
+      hours[opId] += 11;
+      if (isFestivo) weekends[opId]++;
     }
+
+    // Pomeriggi
+    while (pNeeded > 0 && jollies.length > 0) {
+      const opId = jollies.shift()!;
+      const codes = isFestivo ? ['P1', 'P2'] : ['P1', 'P2', 'P3'];
+      const assignedCode = codes.find(c => !Object.values(dayAssignments).includes(c)) || 'P1';
+      dayAssignments[opId] = assignedCode;
+      pNeeded--;
+      hours[opId] += 6.5;
+      if (isFestivo) weekends[opId]++;
+    }
+
+    // Mattine
+    while (mNeeded > 0 && jollies.length > 0) {
+      const opId = jollies.shift()!;
+      const codes = isFestivo ? ['M1', 'M2'] : ['M1', 'M2', 'M3'];
+      const assignedCode = codes.find(c => !Object.values(dayAssignments).includes(c)) || 'M1';
+      dayAssignments[opId] = assignedCode;
+      mNeeded--;
+      hours[opId] += 6.5;
+      if (isFestivo) weekends[opId]++;
+    }
+
+    // I Jolly rimanenti vanno a Riposo
+    jollies.forEach(opId => {
+      dayAssignments[opId] = 'L';
+    });
+
+    if (nNeeded > 0) errors.push({ tipo: 'critico', giorno: d, messaggio: `Mancano ${nNeeded} turni di Notte e nessun Jolly disponibile.` });
+    if (pNeeded > 0) errors.push({ tipo: 'warning', giorno: d, messaggio: `Mancano ${pNeeded} turni di Pomeriggio.` });
+    if (mNeeded > 0) errors.push({ tipo: 'warning', giorno: d, messaggio: `Mancano ${mNeeded} turni di Mattina.` });
+
+    Object.keys(dayAssignments).forEach(opId => {
+      finalSchedule.push({
+        id: `${opId}_${dateStr}`,
+        operatoreId: opId,
+        data: dateStr,
+        codiceTurno: dayAssignments[opId]
+      });
+    });
   }
 
-  // Final check of the best schedule to return any error messages (sorted by day)
-  bestRunErrors.sort((a, b) => a.giorno - b.giorno);
+  // Check monte ore fine mese
+  activeOperators.forEach(op => {
+    if (hours[op.id] > op.oreContrattualiMensili) {
+      errors.push({
+        tipo: 'warning',
+        giorno: numDays,
+        operatoreId: op.id,
+        messaggio: `${op.cognome} supera il monte ore mensile (${Math.round(hours[op.id])}/${op.oreContrattualiMensili} ore)`
+      });
+    }
+  });
 
-  return {
-    schedule: bestSchedule,
-    errors: bestRunErrors
-  };
+  return { schedule: finalSchedule, errors: errors.sort((a, b) => a.giorno - b.giorno) };
 }
 
 // Function to validate any existing schedule grid and check for errors
@@ -553,20 +319,20 @@ export function validateSchedule(
     let pCount = 0;
     let nCount = 0;
 
-      let fCount = 0;
-      operators.forEach(op => {
-        if (op.stato !== 'attivo') return;
-        const code = scheduleMap[op.id]?.[dateStr] || 'L';
-        const cat = getShiftCategory(code);
-        if (cat === 'mattina') mCount++;
-        else if (cat === 'pomeriggio') pCount++;
-        else if (cat === 'notte') nCount++;
-        else if (cat === 'ferie' || cat === 'assenza') fCount++;
-      });
+    let fCount = 0;
+    operators.forEach(op => {
+      if (op.stato !== 'attivo') return;
+      const code = scheduleMap[op.id]?.[dateStr] || 'L';
+      const cat = getShiftCategory(code);
+      if (cat === 'mattina') mCount++;
+      else if (cat === 'pomeriggio') pCount++;
+      else if (cat === 'notte') nCount++;
+      else if (cat === 'ferie' || cat === 'assenza') fCount++;
+    });
 
-      if (fCount > 3) {
-        errors.push({ tipo: 'warning', giorno: d, messaggio: `Giorno ${d}: Rilevate troppe ferie/assenze contemporanee (${fCount}/3 consentite)` });
-      }
+    if (fCount > 3) {
+      errors.push({ tipo: 'warning', giorno: d, messaggio: `Giorno ${d}: Rilevate troppe ferie/assenze contemporanee (${fCount}/3 consentite)` });
+    }
 
     const dayOfWeek = new Date(year, month - 1, d).getDay();
     const isSunday = dayOfWeek === 0;
@@ -639,8 +405,6 @@ export function validateSchedule(
           }
         }
       }
-
-      // Rimossa la verifica P -> Mattina (ammessa dal coordinatore)
     }
 
     if (opTotalHours > op.oreContrattualiMensili) {
