@@ -73,9 +73,10 @@ export const useSupabaseSync = (appState: any) => {
           
         if (depErr || !deps) throw new Error("Errore durante la verifica del reparto.");
         
+        const cleanDeptId = departmentId.trim();
         const matchingDep = deps.find(d => 
-          d.id === departmentId || 
-          (d.name && d.name.toLowerCase() === departmentId?.toLowerCase())
+          d.id === cleanDeptId || 
+          (d.name && d.name.toLowerCase() === cleanDeptId.toLowerCase())
         );
         
         if (!matchingDep) {
@@ -118,8 +119,9 @@ export const useSupabaseSync = (appState: any) => {
         setIsDataLoaded(false); // L'operatore deve scaricare i dati del suo reparto
         // Aggiungiamo subito il profilo base all'array locale per evitare errori se pullInitialData ritarda
         if (departmentId) {
+            const cleanDeptIdLocal = departmentId.trim();
             const { data: deps } = await supabase.from('departments').select('"coordinatorId", id, name');
-            const matchingDep = deps?.find(d => d.id === departmentId || (d.name && d.name.toLowerCase() === departmentId?.toLowerCase()));
+            const matchingDep = deps?.find(d => d.id === cleanDeptIdLocal || (d.name && d.name.toLowerCase() === cleanDeptIdLocal.toLowerCase()));
             if (matchingDep) {
                 const newOpLocal = {
                     id: authUser.id,
