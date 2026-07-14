@@ -14,6 +14,8 @@ export const useSupabaseSync = (appState: any) => {
     return saved ? JSON.parse(saved) : null;
   });
 
+  const [isDataLoaded, setIsDataLoaded] = useState<boolean>(!localStorage.getItem('tsrm_user'));
+
   const [userRole, setUserRole] = useState<'coordinatore' | 'operatore' | null>(() => {
     const saved = localStorage.getItem('tsrm_user_role');
     return saved ? (saved as 'coordinatore' | 'operatore') : null;
@@ -38,7 +40,7 @@ export const useSupabaseSync = (appState: any) => {
   }, [supabaseConfig]);
 
   // Auth Functions
-  const signUp = async (email: string, password: string): Promise<void> => {
+  const signUp = async (email: string, password: string, role: 'coordinatore' | 'operatore'): Promise<void> => {
     if (!supabaseConfig.url || !supabaseConfig.anonKey) throw new Error("Supabase non configurato.");
     const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
     const { data, error } = await supabase.auth.signUp({ email, password });
@@ -46,18 +48,20 @@ export const useSupabaseSync = (appState: any) => {
     
     const authUser = data?.user;
     if (authUser) {
-      const { error: assocErr } = await supabase
-        .from('coordinators')
-        .upsert({ id: authUser.id, email: email.trim().toLowerCase() });
-      if (assocErr) throw new Error(`Associazione coordinatore fallita: ${assocErr.message}`);
+      if (role === 'coordinatore') {
+        const { error: assocErr } = await supabase
+          .from('coordinators')
+          .upsert({ id: authUser.id, email: email.trim().toLowerCase() });
+        if (assocErr) throw new Error(`Associazione coordinatore fallita: ${assocErr.message}`);
+        setCurrentCoordinatorId(authUser.id);
+        localStorage.setItem('tsrm_coordinator_id', authUser.id);
+      }
 
-      // Seed data logic will be updated for departments later
       setUser(authUser);
-      setUserRole('coordinatore');
-      setCurrentCoordinatorId(authUser.id);
+      setUserRole(role);
       localStorage.setItem('tsrm_user', JSON.stringify(authUser));
-      localStorage.setItem('tsrm_user_role', 'coordinatore');
-      localStorage.setItem('tsrm_coordinator_id', authUser.id);
+      localStorage.setItem('tsrm_user_role', role);
+      setIsDataLoaded(true); // Nessun dato da caricare per i nuovi utenti
     }
   };
 
@@ -69,12 +73,26 @@ export const useSupabaseSync = (appState: any) => {
     
     const authUser = data?.user;
     if (authUser) {
+      // Determina il ruolo controllando la tabella coordinators
+      const { data: coordData, error: coordErr } = await supabase
+        .from('coordinators')
+        .select('id')
+        .eq('id', authUser.id)
+        .single();
+      
+      const role = (coordData && !coordErr) ? 'coordinatore' : 'operatore';
+      
       setUser(authUser);
-      setUserRole('coordinatore');
-      setCurrentCoordinatorId(authUser.id);
+      setUserRole(role);
+      if (role === 'coordinatore') {
+        setCurrentCoordinatorId(authUser.id);
+        localStorage.setItem('tsrm_coordinator_id', authUser.id);
+      }
       localStorage.setItem('tsrm_user', JSON.stringify(authUser));
-      localStorage.setItem('tsrm_user_role', 'coordinatore');
-      localStorage.setItem('tsrm_coordinator_id', authUser.id);
+      localStorage.setItem('tsrm_user_role', role);
+      
+      setIsDataLoaded(false); // Inizializza il caricamento dati
+      await syncData(); // Forza la sync dopo il login
     }
   };
 
@@ -141,6 +159,7 @@ export const useSupabaseSync = (appState: any) => {
       }
       
       setHasLocalChanges(false);
+      setIsDataLoaded(true); // Dati caricati!
     } catch (e: any) {
       console.error(e);
       throw e;
@@ -171,6 +190,7 @@ export const useSupabaseSync = (appState: any) => {
             _setSchedule(finalSchedule);
             localStorage.setItem('tsrm_schedule', JSON.stringify(finalSchedule));
           }
+          setIsDataLoaded(true);
         } catch (e) {
           console.error("Errore nel pull iniziale:", e);
         }
@@ -216,12 +236,15 @@ export const useSupabaseSync = (appState: any) => {
   }, [operators, shifts, schedule, supabaseConfig.connected, currentCoordinatorId, userRole]);
 
   return {
-    user, setUser,
-    userRole, setUserRole,
-    currentCoordinatorId, setCurrentCoordinatorId,
-    supabaseConfig, setSupabaseConfig,
-    connectSupabase, saveSupabaseSettings: connectSupabase,
-    signUp, signIn, logout,
-    syncData
+    user,
+    userRole,
+    supabaseConfig,
+    currentCoordinatorId,
+    saveSupabaseSettings: connectSupabase,
+    syncData,
+    signUp,
+    signIn,
+    logout,
+    isDataLoaded
   };
 };

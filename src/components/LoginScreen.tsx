@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Activity, KeyRound, Mail, ShieldAlert, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Activity, KeyRound, Mail, ShieldAlert, Eye, EyeOff, Loader2, Building2, User } from 'lucide-react';
 
 export const LoginScreen: React.FC = () => {
   const { signIn, signUp } = useApp();
   
   const [isRegister, setIsRegister] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<'coordinatore' | 'operatore'>('operatore');
   
   // Form fields
   const [email, setEmail] = useState('');
@@ -23,7 +24,7 @@ export const LoginScreen: React.FC = () => {
 
     try {
       if (isRegister) {
-        await signUp(email, password);
+        await signUp(email, password, selectedRole);
       } else {
         await signIn(email, password);
       }
@@ -57,88 +58,124 @@ export const LoginScreen: React.FC = () => {
           </p>
         </div>
 
+        {/* Tab Switcher */}
+        <div className="flex bg-slate-800/50 p-1 rounded-xl mb-6 relative z-20">
+          <button
+            onClick={() => { setIsRegister(false); setErrorMsg(null); }}
+            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${!isRegister ? 'bg-sky-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+          >
+            Accedi
+          </button>
+          <button
+            onClick={() => { setIsRegister(true); setErrorMsg(null); }}
+            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${isRegister ? 'bg-sky-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+          >
+            Registrati
+          </button>
+        </div>
 
-
-        {/* Error Alert Box */}
+        {/* Form Error */}
         {errorMsg && (
-          <div className="mb-5 p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-xs text-rose-300 flex items-start space-x-2.5 animate-shake">
-            <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-            <span>{errorMsg}</span>
+          <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+            <ShieldAlert className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-rose-400 font-medium leading-relaxed">{errorMsg}</p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Email Input */}
-          <div className="flex flex-col space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Indirizzo Email</label>
-            <div className="relative flex items-center">
-              <Mail className="absolute left-3 w-4 h-4 text-slate-500" />
+        <form onSubmit={handleSubmit} className="space-y-5 relative z-20">
+          
+          {isRegister && (
+            <div className="space-y-3 mb-6 animate-in fade-in slide-in-from-top-2">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider pl-1">Seleziona il tuo ruolo</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRole('coordinatore')}
+                  className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${selectedRole === 'coordinatore' ? 'bg-indigo-500/10 border-indigo-500 text-indigo-400' : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:border-slate-500 hover:text-slate-300'}`}
+                >
+                  <Building2 className="w-6 h-6 mb-2" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Coordinatore</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRole('operatore')}
+                  className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${selectedRole === 'operatore' ? 'bg-sky-500/10 border-sky-500 text-sky-400' : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:border-slate-500 hover:text-slate-300'}`}
+                >
+                  <User className="w-6 h-6 mb-2" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Dipendente</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider pl-1">Email</label>
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-sky-500 transition-colors">
+                <Mail className="w-5 h-5" />
+              </div>
               <input
                 type="email"
                 required
-                placeholder="coordinatore@azienda.it"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-3 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all"
+                className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all placeholder:text-slate-600"
+                placeholder="nome@ospedale.it"
               />
             </div>
           </div>
 
-          {/* Password Input */}
-          <div className="flex flex-col space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Password</label>
-            <div className="relative flex items-center">
-              <KeyRound className="absolute left-3 w-4 h-4 text-slate-500" />
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider pl-1">Password</label>
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-sky-500 transition-colors">
+                <KeyRound className="w-5 h-5" />
+              </div>
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
-                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-10 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all"
+                className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl pl-11 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all placeholder:text-slate-600"
+                placeholder="••••••••"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 text-slate-500 hover:text-slate-300"
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-500 hover:text-slate-300 transition-colors"
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
+            {isRegister && (
+              <p className="text-[10px] text-slate-500 pl-1">Minimo 6 caratteri.</p>
+            )}
           </div>
 
-          {/* Toggle Register / Login */}
-          <div className="flex justify-end pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                setIsRegister(!isRegister);
-                setErrorMsg(null);
-              }}
-              className="text-[11px] font-semibold text-sky-400 hover:text-sky-300 transition-colors"
-            >
-              {isRegister ? 'Hai già un account? Accedi' : 'Nuovo coordinatore? Registrati'}
-            </button>
-          </div>
-
-          {/* Action Button */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 mt-4 bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition-all duration-300 disabled:opacity-50 shadow-lg shadow-sky-500/10 cursor-pointer"
+            className="w-full relative group overflow-hidden rounded-xl bg-sky-500 text-white font-bold text-sm tracking-wide py-3.5 transition-all hover:bg-sky-400 hover:shadow-[0_0_20px_rgba(14,165,233,0.3)] disabled:opacity-70 disabled:cursor-not-allowed mt-4"
           >
             {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Caricamento...</span>
-              </>
-            ) : (
-              <span>
-                {isRegister ? 'Registra e Inizializza' : 'Accedi come Coordinatore'}
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin" /> Elaborazione...
               </span>
+            ) : (
+              <span className="relative z-10">{isRegister ? 'Crea Account' : 'Accedi a CareFlow'}</span>
             )}
           </button>
         </form>
+
+        {isRegister && (
+           <div className="mt-6 text-center text-xs text-slate-500">
+             Potrebbe essere necessario verificare l'email dopo la registrazione.
+           </div>
+        )}
+      </div>
+
+      <div className="absolute bottom-6 text-slate-600 text-xs font-medium text-center w-full z-0">
+        &copy; {new Date().getFullYear()} TSRM DEU. Tutti i diritti riservati.
       </div>
     </div>
   );

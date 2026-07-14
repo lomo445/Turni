@@ -13,16 +13,26 @@ import { LoginScreen } from './components/LoginScreen';
 import { EmployeeDashboard } from './components/EmployeeDashboard';
 import { RequestsManager } from './components/RequestsManager';
 import { WizardScreen } from './components/WizardScreen';
-import { RefreshCw, Activity, Wrench } from 'lucide-react';
+import { RefreshCw, Activity, Wrench, Loader2 } from 'lucide-react';
 
 // Declare global build time injected by Vite config
 declare const __BUILD_TIME__: number;
 
 const MainLayout: React.FC = () => {
-  const { activeView, userRole, departments } = useApp();
+  const { activeView, userRole, user, isDataLoaded, departments } = useApp();
   const isCoordinatore = userRole === 'coordinatore';
 
-  if (isCoordinatore && departments.length === 0) {
+  if (user && !isDataLoaded) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-900 font-sans flex-col">
+        <Loader2 className="w-12 h-12 text-sky-500 animate-spin mb-4" />
+        <h2 className="text-xl text-white font-bold tracking-tight">Sincronizzazione Dati...</h2>
+        <p className="text-slate-400 mt-2">Attendere prego</p>
+      </div>
+    );
+  }
+
+  if (isCoordinatore && isDataLoaded && departments.length === 0) {
     return <WizardScreen />;
   }
 

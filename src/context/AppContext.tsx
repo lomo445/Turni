@@ -42,10 +42,11 @@ interface AppContextType {
   exportExcelFile: () => void;
   user: any;
   userRole: 'coordinatore' | 'operatore' | null;
+  isDataLoaded: boolean;
   supabaseConfig: SupabaseConfig;
   saveSupabaseSettings: (url: string, key: string) => Promise<boolean>;
   syncData: () => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, role: 'coordinatore' | 'operatore') => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   logout: () => void;
   geminiApiKey: string | null;
@@ -73,7 +74,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   } = appState;
   
   const {
-    user, userRole, supabaseConfig, currentCoordinatorId,
+    user, userRole, isDataLoaded, supabaseConfig, currentCoordinatorId,
     saveSupabaseSettings, syncData, signUp, signIn, logout
   } = syncState;
 
@@ -259,8 +260,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addShiftType, updateShiftType, deleteShiftType,
       assignShift, assignMultipleShifts, runAutoGeneration, clearMonthSchedule,
       importHistoricalExcel, exportExcelFile,
-      user, userRole, supabaseConfig, saveSupabaseSettings, syncData, signUp, signIn, logout,
-      geminiApiKey, setGeminiApiKey
+      user, userRole, isDataLoaded, supabaseConfig, saveSupabaseSettings, syncData,
+      signUp, signIn, logout, geminiApiKey, setGeminiApiKey
     }}>
       {children}
     </AppContext.Provider>
