@@ -374,68 +374,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       throw new Error('Supabase non è configurato o l\'utente non è loggato.');
     }
     
-    const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+    try {
+      const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
 
-    // 1. Legge lo stato sul cloud filtrato per questo coordinatore
-    const { data: cloudOps, error: errOps } = await supabase
-      .from('operators')
-      .select('*')
-      .eq('coordinatorId', currentCoordinatorId);
+      // 1. Legge lo stato sul cloud filtrato per questo coordinatore
+      const { data: cloudOps, error: errOps } = await supabase
+        .from('operators')
+        .select('*')
+        .eq('coordinatorId', currentCoordinatorId);
 
-    if (errOps) {
-      if (errOps.code === '42P01') {
-        throw new Error("Le tabelle non esistono ancora in Supabase. Per favore, esegui lo script SQL fornito nelle istruzioni prima di procedere.");
+      if (errOps) {
+        if (errOps.code === '42P01') {
+          throw new Error("Le tabelle non esistono ancora in Supabase. Per favore, esegui lo script SQL fornito nelle istruzioni prima di procedere.");
+        }
+        throw new Error(`Errore di connessione Supabase: ${errOps.message}`);
       }
-      throw new Error(`Errore di connessione Supabase: ${errOps.message}`);
-    }
 
-    const opsToUpsert = operators.map(o => ({ ...o, coordinatorId: currentCoordinatorId }));
-    const shiftsToUpsert = shifts.map(s => ({ ...s, coordinatorId: currentCoordinatorId }));
-    const scheduleToUpsert = schedule.map(sc => ({ ...sc, coordinatorId: currentCoordinatorId }));
+      const opsToUpsert = operators.map(o => ({ ...o, coordinatorId: currentCoordinatorId }));
+      const shiftsToUpsert = shifts.map(s => ({ ...s, coordinatorId: currentCoordinatorId }));
+      const scheduleToUpsert = schedule.map(sc => ({ ...sc, coordinatorId: currentCoordinatorId }));
 
-    // 2. Se il cloud è vuoto per questo coordinatore, invia (PUSH) i dati locali
-    if (!cloudOps || cloudOps.length === 0) {
+      // 2. Se il cloud è vuoto per questo coordinatore, invia (PUSH) i dati locali
+      if (!cloudOps || cloudOps.length === 0) {
+        const { error: opErr } = await supabase.from('operators').upsert(opsToUpsert);
+        if (opErr) throw new Error(`Errore caricamento operatori: ${opErr.message}`);
+        
+        const { error: shErr } = await supabase.from('shifts').upsert(shiftsToUpsert);
+        if (shErr) throw new Error(`Errore caricamento turni: ${shErr.message}`);
+        
+        if (scheduleToUpsert.length > 0) {
+          const { error: scErr } = await supabase.from('schedule').upsert(scheduleToUpsert);
+          if (scErr) throw new Error(`Errore caricamento calendario: ${scErr.message}`);
+        }
+        return;
+      }
+
+      // 3. Se il cloud contiene dati, esegui l'unione (UPSERT locale -> cloud e poi PULL cloud -> locale)
       const { error: opErr } = await supabase.from('operators').upsert(opsToUpsert);
-      if (opErr) throw new Error(`Errore caricamento operatori: ${opErr.message}`);
-      
+      if (opErr) throw new Error(`Errore sincronizzazione operatori: ${opErr.message}`);
+
       const { error: shErr } = await supabase.from('shifts').upsert(shiftsToUpsert);
-      if (shErr) throw new Error(`Errore caricamento turni: ${shErr.message}`);
-      
+      if (shErr) throw new Error(`Errore sincronizzazione turni: ${shErr.message}`);
+
       if (scheduleToUpsert.length > 0) {
         const { error: scErr } = await supabase.from('schedule').upsert(scheduleToUpsert);
-        if (scErr) throw new Error(`Errore caricamento calendario: ${scErr.message}`);
+        if (scErr) throw new Error(`Errore sincronizzazione calendario: ${scErr.message}`);
       }
-      return;
-    }
 
-    // 3. Se il cloud contiene dati, esegui l'unione (UPSERT locale -> cloud e poi PULL cloud -> locale)
-    const { error: opErr } = await supabase.from('operators').upsert(opsToUpsert);
-    if (opErr) throw new Error(`Errore sincronizzazione operatori: ${opErr.message}`);
+      // Riscarica i dati finali consolidati
+      const { data: finalOps } = await supabase.from('operators').select('*').eq('coordinatorId', currentCoordinatorId);
+      const { data: finalShifts } = await supabase.from('shifts').select('*').eq('coordinatorId', currentCoordinatorId);
+      const { data: finalSchedule } = await supabase.from('schedule').select('*').eq('coordinatorId', currentCoordinatorId);
 
-    const { error: shErr } = await supabase.from('shifts').upsert(shiftsToUpsert);
-    if (shErr) throw new Error(`Errore sincronizzazione turni: ${shErr.message}`);
-
-    if (scheduleToUpsert.length > 0) {
-      const { error: scErr } = await supabase.from('schedule').upsert(scheduleToUpsert);
-      if (scErr) throw new Error(`Errore sincronizzazione calendario: ${scErr.message}`);
-    }
-
-    // Riscarica i dati finali consolidati
-    const { data: finalOps } = await supabase.from('operators').select('*').eq('coordinatorId', currentCoordinatorId);
-    const { data: finalShifts } = await supabase.from('shifts').select('*').eq('coordinatorId', currentCoordinatorId);
-    const { data: finalSchedule } = await supabase.from('schedule').select('*').eq('coordinatorId', currentCoordinatorId);
-
-    if (finalOps && finalOps.length > 0) {
-      setOperators(finalOps);
-      localStorage.setItem('tsrm_operators', JSON.stringify(finalOps));
-    }
-    if (finalShifts && finalShifts.length > 0) {
-      setShifts(finalShifts);
-      localStorage.setItem('tsrm_shifts', JSON.stringify(finalShifts));
-    }
-    if (finalSchedule) {
-      setSchedule(finalSchedule);
-      localStorage.setItem('tsrm_schedule', JSON.stringify(finalSchedule));
+      if (finalOps && finalOps.length > 0) {
+        setOperators(finalOps);
+        localStorage.setItem('tsrm_operators', JSON.stringify(finalOps));
+      }
+      if (finalShifts && finalShifts.length > 0) {
+        setShifts(finalShifts);
+        localStorage.setItem('tsrm_shifts', JSON.stringify(finalShifts));
+      }
+      if (finalSchedule) {
+        setSchedule(finalSchedule);
+        localStorage.setItem('tsrm_schedule', JSON.stringify(finalSchedule));
+      }
+    } catch (e: any) {
+      alert(`Errore Sincronizzazione Cloud: ${e.message}`);
+      console.error(e);
     }
   };
 
@@ -450,14 +455,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const shiftsToUpsert = shifts.map(s => ({ ...s, coordinatorId: currentCoordinatorId }));
         const scheduleToUpsert = schedule.map(sc => ({ ...sc, coordinatorId: currentCoordinatorId }));
 
-        await supabase.from('operators').upsert(opsToUpsert);
-        await supabase.from('shifts').upsert(shiftsToUpsert);
+        const { error: err1 } = await supabase.from('operators').upsert(opsToUpsert);
+        if (err1) throw new Error('Operators: ' + err1.message);
+        
+        const { error: err2 } = await supabase.from('shifts').upsert(shiftsToUpsert);
+        if (err2) throw new Error('Shifts: ' + err2.message);
+        
         if (scheduleToUpsert.length > 0) {
-          await supabase.from('schedule').upsert(scheduleToUpsert);
+          const { error: err3 } = await supabase.from('schedule').upsert(scheduleToUpsert);
+          if (err3) throw new Error('Schedule: ' + err3.message);
         }
         console.log('Salvataggio automatico cloud completato con successo.');
-      } catch (e) {
-        console.error('Errore salvataggio automatico cloud:', e);
+      } catch (e: any) {
+        console.error('Errore salvataggio automatico cloud (Probabilmente mancano le tabelle nel database!):', e.message);
       }
     }, 2500);
 
