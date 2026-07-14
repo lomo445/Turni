@@ -15,7 +15,8 @@ import {
   CloudOff,
   RefreshCw,
   LogOut,
-  Send
+  Send,
+  Building2
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -43,6 +44,7 @@ export const Sidebar: React.FC = () => {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'calendario', label: 'Calendario Turni', icon: Calendar },
     { id: 'richieste', label: 'Richieste Dipendenti', icon: Send },
+    { id: 'reparti', label: 'Gestione Reparti', icon: Building2 },
     { id: 'operatori', label: 'Operatori', icon: Users },
     { id: 'regole', label: 'Regole Motore', icon: Sliders },
     { id: 'generazione', label: 'Generazione Automatica', icon: Wand2 },

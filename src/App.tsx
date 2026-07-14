@@ -13,6 +13,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { EmployeeDashboard } from './components/EmployeeDashboard';
 import { RequestsManager } from './components/RequestsManager';
 import { WizardScreen } from './components/WizardScreen';
+import { DepartmentManager } from './components/DepartmentManager';
 import { RefreshCw, Activity, Wrench, Loader2 } from 'lucide-react';
 
 // Declare global build time injected by Vite config
@@ -47,6 +48,7 @@ const MainLayout: React.FC = () => {
         {activeView === 'dashboard' && !isCoordinatore && <EmployeeDashboard />}
         {activeView === 'calendario' && <CalendarView />}
         {activeView === 'operatori' && isCoordinatore && <OperatorManager />}
+        {activeView === 'reparti' && isCoordinatore && <DepartmentManager />}
         {activeView === 'richieste' && isCoordinatore && <RequestsManager />}
         {activeView === 'generazione' && isCoordinatore && <AutomaticGenerator />}
         {activeView === 'regole' && isCoordinatore && <RuleSettingsScreen />}

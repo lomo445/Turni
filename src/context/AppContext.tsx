@@ -26,6 +26,8 @@ interface AppContextType {
   setCurrentDepartmentId: (id: string | null) => void;
   setDepartments: (deps: Department[]) => void;
   updateDepartment: (id: string, updates: Partial<Department>) => void;
+  addDepartment: (dept: Department) => void;
+  deleteDepartment: (id: string) => Promise<void>;
   addOperator: (op: Operator) => void;
   updateOperator: (op: Operator) => void;
   deleteOperator: (id: string) => void;
@@ -80,6 +82,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateDepartment = (id: string, updates: Partial<Department>) => {
     appState.setDepartments((prev: Department[]) => prev.map(d => d.id === id ? { ...d, ...updates } : d));
+  };
+
+  const addDepartment = (dept: Department) => {
+    appState.setDepartments((prev: Department[]) => [...prev, dept]);
+  };
+
+  const deleteDepartment = async (id: string) => {
+    // Rimuovi in locale
+    appState.setDepartments((prev: Department[]) => prev.filter(d => d.id !== id));
+    if (currentDepartmentId === id) {
+      setCurrentDepartmentId(null);
+    }
+    // Rimuovi dal cloud
+    if (supabaseConfig.connected && supabaseConfig.url && supabaseConfig.anonKey) {
+      const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+      await supabase.from('departments').delete().eq('id', id);
+    }
   };
 
   const [errors, setErrors] = useState<GenerationError[]>([]);
@@ -253,7 +272,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider value={{
       year, setYear, month, setMonth, activeView, setActiveView,
       highlightedDay, setHighlightedDay, departments, setDepartments,
-      currentDepartmentId, setCurrentDepartmentId, updateDepartment,
+      currentDepartmentId, setCurrentDepartmentId, updateDepartment, addDepartment, deleteDepartment,
       operators, shifts, schedule, shiftRequests, errors,
       addOperator, updateOperator, deleteOperator,
       addRequest, updateRequestStatus,
