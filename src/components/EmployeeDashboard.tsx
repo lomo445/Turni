@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 export const EmployeeDashboard: React.FC = () => {
-  const { user, operators, schedule, shifts, shiftRequests, addRequest, deleteRequest, currentDepartmentId } = useApp();
+  const { user, operators, schedule, shifts, shiftRequests, addRequest, deleteRequest, currentDepartmentId, isDataLoaded } = useApp();
   
   // Trova l'operatore corrispondente all'utente loggato tramite ID
   const myProfile = operators.find(o => o.id === user?.id);
@@ -23,7 +23,21 @@ export const EmployeeDashboard: React.FC = () => {
   const [dettagli, setDettagli] = useState('');
 
   if (!myProfile) {
-    return <div className="p-8">Profilo dipendente non trovato nel database.</div>;
+    return (
+      <div className="p-8 space-y-4">
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl">
+          <h3 className="font-bold">Profilo dipendente non trovato nel database.</h3>
+          <div className="mt-4 text-xs font-mono bg-white p-3 rounded border border-rose-100 overflow-auto">
+            <div>User ID: {user?.id}</div>
+            <div>User Email: {user?.email}</div>
+            <div>Operators count: {operators.length}</div>
+            <div>Operator IDs: {operators.map(o => o.id).join(', ')}</div>
+            <div>IsDataLoaded: {isDataLoaded ? 'true' : 'false'}</div>
+            <div>CurrentCoordinatorId: {currentDepartmentId /* wait this is wrong */}</div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Filtra turni del mese corrente

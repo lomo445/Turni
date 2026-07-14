@@ -358,9 +358,11 @@ export const useSupabaseSync = (appState: any) => {
             _setShiftRequests(finalReqs);
             localStorage.setItem('tsrm_requests', JSON.stringify(finalReqs));
           }
-          setIsDataLoaded(true);
+          // setIsDataLoaded(true) rimosso da qui e messo nel finally
         } catch (e) {
           console.error("Errore nel pull iniziale:", e);
+        } finally {
+          setIsDataLoaded(true);
         }
       };
       pullInitialData();
