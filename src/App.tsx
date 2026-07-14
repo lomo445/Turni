@@ -5,18 +5,26 @@ import { Dashboard } from './components/Dashboard';
 import { CalendarView } from './components/CalendarView';
 import { OperatorManager } from './components/OperatorManager';
 import { LegendManager } from './components/LegendManager';
+import { RuleSettingsScreen } from './components/RuleSettingsScreen';
 import { AutomaticGenerator } from './components/AutomaticGenerator';
 import { StatsDashboard } from './components/StatsDashboard';
 import { ExcelImporter } from './components/ExcelImporter';
 import { LoginScreen } from './components/LoginScreen';
+import { EmployeeDashboard } from './components/EmployeeDashboard';
+import { RequestsManager } from './components/RequestsManager';
+import { WizardScreen } from './components/WizardScreen';
 import { RefreshCw, Activity, Wrench } from 'lucide-react';
 
 // Declare global build time injected by Vite config
 declare const __BUILD_TIME__: number;
 
 const MainLayout: React.FC = () => {
-  const { activeView, userRole } = useApp();
+  const { activeView, userRole, departments } = useApp();
   const isCoordinatore = userRole === 'coordinatore';
+
+  if (isCoordinatore && departments.length === 0) {
+    return <WizardScreen />;
+  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-900 font-sans">
@@ -26,9 +34,12 @@ const MainLayout: React.FC = () => {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
         {activeView === 'dashboard' && isCoordinatore && <Dashboard />}
+        {activeView === 'dashboard' && !isCoordinatore && <EmployeeDashboard />}
         {activeView === 'calendario' && <CalendarView />}
         {activeView === 'operatori' && isCoordinatore && <OperatorManager />}
+        {activeView === 'richieste' && isCoordinatore && <RequestsManager />}
         {activeView === 'generazione' && isCoordinatore && <AutomaticGenerator />}
+        {activeView === 'regole' && isCoordinatore && <RuleSettingsScreen />}
         {activeView === 'statistiche' && isCoordinatore && <StatsDashboard />}
         {activeView === 'importa' && isCoordinatore && <ExcelImporter />}
         {activeView === 'impostazioni' && isCoordinatore && <LegendManager />}

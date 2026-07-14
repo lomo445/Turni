@@ -1,30 +1,36 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import type { Operator, ShiftType, DailySchedule, SupabaseConfig } from '../types';
-import { INITIAL_OPERATORS, DEFAULT_SHIFTS, JULY_2026_SCHEDULE } from '../constants/initialData';
+import type { Operator, ShiftType, DailySchedule, SupabaseConfig, Department, ShiftRequest } from '../types';
 import { generateSchedule, validateSchedule } from '../utils/scheduler';
 import type { GenerationError } from '../utils/scheduler';
 import { importExcel, exportToExcel } from '../utils/excel';
+import { useAppState } from '../hooks/useAppState';
+import { useSupabaseSync } from '../hooks/useSupabaseSync';
 
 interface AppContextType {
   year: number;
   month: number;
   activeView: string;
+  highlightedDay: number | null;
+  departments: Department[];
+  currentDepartmentId: string | null;
   operators: Operator[];
   shifts: ShiftType[];
   schedule: DailySchedule[];
+  shiftRequests: ShiftRequest[];
   errors: GenerationError[];
-  supabaseConfig: SupabaseConfig;
-  highlightedDay: number | null;
-  user: any;
-  userRole: 'coordinatore' | 'operatore' | null;
-  setHighlightedDay: (d: number | null) => void;
   setYear: (y: number) => void;
   setMonth: (m: number) => void;
   setActiveView: (view: string) => void;
+  setHighlightedDay: (d: number | null) => void;
+  setCurrentDepartmentId: (id: string | null) => void;
+  setDepartments: (deps: Department[]) => void;
+  updateDepartment: (id: string, updates: Partial<Department>) => void;
   addOperator: (op: Operator) => void;
   updateOperator: (op: Operator) => void;
   deleteOperator: (id: string) => void;
+  addRequest: (req: ShiftRequest) => void;
+  updateRequestStatus: (id: string, stato: 'approvato' | 'rifiutato') => void;
   addShiftType: (s: ShiftType) => void;
   updateShiftType: (s: ShiftType) => void;
   deleteShiftType: (code: string) => void;
@@ -34,181 +40,55 @@ interface AppContextType {
   clearMonthSchedule: (y: number, m: number) => void;
   importHistoricalExcel: (fileData: ArrayBuffer) => string;
   exportExcelFile: () => void;
+  user: any;
+  userRole: 'coordinatore' | 'operatore' | null;
+  supabaseConfig: SupabaseConfig;
   saveSupabaseSettings: (url: string, key: string) => Promise<boolean>;
   syncData: () => Promise<void>;
-  resetDatabase: () => void;
-  geminiApiKey: string | null;
-  setGeminiApiKey: (key: string | null) => void;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
-  signInAsOperator: (coordinatorEmail: string) => Promise<void>;
-  logout: () => Promise<void>;
+  logout: () => void;
+  geminiApiKey: string | null;
+  setGeminiApiKey: (key: string | null) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const useApp = () => {
   const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
+  if (!context) throw new Error('useApp must be used within an AppProvider');
   return context;
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<any>(() => {
-    const saved = localStorage.getItem('tsrm_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const appState = useAppState();
+  const syncState = useSupabaseSync(appState);
+  
+  const {
+    year, setYear, month, setMonth, activeView, setActiveView,
+    highlightedDay, setHighlightedDay, departments, setDepartments,
+    currentDepartmentId, setCurrentDepartmentId,
+    operators, setOperators, shifts, setShifts, schedule, setSchedule,
+    shiftRequests, setShiftRequests
+  } = appState;
+  
+  const {
+    user, userRole, supabaseConfig, currentCoordinatorId,
+    saveSupabaseSettings, syncData, signUp, signIn, logout
+  } = syncState;
 
-  const [userRole, setUserRole] = useState<'coordinatore' | 'operatore' | null>(() => {
-    const saved = localStorage.getItem('tsrm_user_role');
-    return saved ? (saved as 'coordinatore' | 'operatore') : null;
-  });
-
-  const [currentCoordinatorId, setCurrentCoordinatorId] = useState<string | null>(() => {
-    return localStorage.getItem('tsrm_coordinator_id');
-  });
-
-  const currentDate = new Date();
-  const [year, setYear] = useState<number>(() => {
-    const saved = localStorage.getItem('tsrm_year');
-    return saved ? Number(saved) : currentDate.getFullYear();
-  });
-  const [month, setMonth] = useState<number>(() => {
-    const saved = localStorage.getItem('tsrm_month');
-    return saved ? Number(saved) : (currentDate.getMonth() + 1);
-  });
-  const [activeView, setActiveView] = useState<string>('dashboard');
-
-  // Load state from localStorage or use defaults
-  const [operators, _setOperators] = useState<Operator[]>(() => {
-    try {
-      const stored = localStorage.getItem('tsrm_operators');
-      if (stored) return JSON.parse(stored);
-    } catch (e) {
-      console.error(e);
-    }
-    return INITIAL_OPERATORS;
-  });
-
-  const [shifts, _setShifts] = useState<ShiftType[]>(() => {
-    try {
-      const stored = localStorage.getItem('tsrm_shifts');
-      if (stored) return JSON.parse(stored);
-    } catch (e) {
-      console.error(e);
-    }
-    return DEFAULT_SHIFTS;
-  });
-
-  const [schedule, _setSchedule] = useState<DailySchedule[]>(() => {
-    try {
-      const stored = localStorage.getItem('tsrm_schedule');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          const validParsed = parsed.filter((s: any) => s && s.data && typeof s.data === 'string' && s.operatoreId && s.codiceTurno);
-          const hasJuly = validParsed.some((s: any) => s.data.startsWith('2026-07'));
-          if (!hasJuly) {
-            const merged = [...validParsed, ...JULY_2026_SCHEDULE];
-            localStorage.setItem('tsrm_schedule', JSON.stringify(merged));
-            return merged;
-          }
-          return validParsed;
-        }
-      }
-    } catch (e) {
-      console.error("Errore nel caricamento dello storico calendario da localStorage:", e);
-    }
-    localStorage.setItem('tsrm_schedule', JSON.stringify(JULY_2026_SCHEDULE));
-    return JULY_2026_SCHEDULE;
-  });
-
-  const [hasLocalChanges, setHasLocalChanges] = useState(false);
-
-  const setOperators = (val: any) => {
-    if (typeof val === 'function') {
-      _setOperators((prev: Operator[]) => {
-        const newVal = val(prev);
-        return newVal;
-      });
-    } else {
-      _setOperators(val);
-    }
-    setHasLocalChanges(true);
+  const updateDepartment = (id: string, updates: Partial<Department>) => {
+    appState.setDepartments((prev: Department[]) => prev.map(d => d.id === id ? { ...d, ...updates } : d));
   };
 
-  const setShifts = (val: any) => {
-    if (typeof val === 'function') {
-      _setShifts((prev: ShiftType[]) => {
-        const newVal = val(prev);
-        return newVal;
-      });
-    } else {
-      _setShifts(val);
-    }
-    setHasLocalChanges(true);
-  };
-
-  const setSchedule = (val: any) => {
-    if (typeof val === 'function') {
-      _setSchedule((prev: DailySchedule[]) => {
-        const newVal = val(prev);
-        return newVal;
-      });
-    } else {
-      _setSchedule(val);
-    }
-    setHasLocalChanges(true);
-  };
-
-  const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>({
-    url: 'https://oqglyzmfbtgznybccpnf.supabase.co',
-    anonKey: 'sb_publishable_4IOMMi2znxIK1OBqzjnnAQ_9UbLm4Wr',
-    connected: true
-  });
-
-  const [geminiApiKey, setGeminiApiKeyState] = useState<string | null>(() => {
-    return localStorage.getItem('tsrm_gemini_api_key') || null;
-  });
+  const [errors, setErrors] = useState<GenerationError[]>([]);
+  const [geminiApiKey, setGeminiApiKeyState] = useState<string | null>(() => localStorage.getItem('tsrm_gemini_api_key') || null);
 
   const setGeminiApiKey = (key: string | null) => {
     setGeminiApiKeyState(key);
-    if (key) {
-      localStorage.setItem('tsrm_gemini_api_key', key);
-    } else {
-      localStorage.removeItem('tsrm_gemini_api_key');
-    }
+    if (key) localStorage.setItem('tsrm_gemini_api_key', key);
+    else localStorage.removeItem('tsrm_gemini_api_key');
   };
-
-  const [highlightedDay, setHighlightedDay] = useState<number | null>(null);
-
-  const [errors, setErrors] = useState<GenerationError[]>([]);
-
-  useEffect(() => {
-    localStorage.setItem('tsrm_operators', JSON.stringify(operators));
-  }, [operators]);
-
-  useEffect(() => {
-    localStorage.setItem('tsrm_shifts', JSON.stringify(shifts));
-  }, [shifts]);
-
-  useEffect(() => {
-    localStorage.setItem('tsrm_schedule', JSON.stringify(schedule));
-  }, [schedule]);
-
-  useEffect(() => {
-    localStorage.setItem('tsrm_supabase', JSON.stringify(supabaseConfig));
-  }, [supabaseConfig]);
-
-  useEffect(() => {
-    localStorage.setItem('tsrm_year', String(year));
-  }, [year]);
-
-  useEffect(() => {
-    localStorage.setItem('tsrm_month', String(month));
-  }, [month]);
 
   useEffect(() => {
     const errs = validateSchedule(year, month, schedule, operators, shifts);
@@ -216,7 +96,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [year, month, schedule, operators, shifts]);
 
   const addOperator = (op: Operator) => {
-    setOperators((prev: Operator[]) => [...prev, op]);
+    const opWithDept = { ...op, departmentId: currentDepartmentId || undefined };
+    setOperators((prev: Operator[]) => [...prev, opWithDept]);
   };
 
   const updateOperator = (op: Operator) => {
@@ -233,8 +114,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addRequest = (req: ShiftRequest) => setShiftRequests((prev: ShiftRequest[]) => [...prev, req]);
+  const updateRequestStatus = (id: string, stato: 'approvato' | 'rifiutato') => {
+    setShiftRequests((prev: ShiftRequest[]) => prev.map((r: ShiftRequest) => r.id === id ? { ...r, stato } : r));
+  };
+
   const addShiftType = (s: ShiftType) => {
-    setShifts((prev: ShiftType[]) => [...prev, s]);
+    const sWithDept = { ...s, departmentId: currentDepartmentId || undefined };
+    setShifts((prev: ShiftType[]) => [...prev, sWithDept]);
   };
 
   const updateShiftType = (s: ShiftType) => {
@@ -255,16 +142,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!shiftCode) return filtered;
       return [...filtered, {
         id: `${opId}_${dateStr}`,
+        departmentId: currentDepartmentId || undefined,
         operatoreId: opId,
         data: dateStr,
         codiceTurno: shiftCode
       }];
     });
-
-    if (!shiftCode && supabaseConfig.connected && supabaseConfig.url && supabaseConfig.anonKey && currentCoordinatorId) {
-      const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
-      await supabase.from('schedule').delete().eq('id', `${opId}_${dateStr}`).eq('coordinatorId', currentCoordinatorId);
-    }
   };
 
   const assignMultipleShifts = (schedulesToAdd: DailySchedule[]) => {
@@ -277,33 +160,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const runAutoGeneration = (prevMonthSchedule: DailySchedule[]) => {
     const targetMonthPrefix = `${year}-${String(month).padStart(2, '0')}`;
-    const targetMonthLeaves = schedule.filter(s => 
-      s.data.startsWith(targetMonthPrefix) && s.codiceTurno !== 'L'
-    );
+    const targetMonthLeaves = schedule.filter(s => s.data.startsWith(targetMonthPrefix) && s.codiceTurno !== 'L');
 
     let prevMonthScheduleMerged = prevMonthSchedule;
     if (prevMonthScheduleMerged.length === 0) {
       const prevDate = new Date(year, month - 2, 1);
-      const prevYear = prevDate.getFullYear();
-      const prevMonth = prevDate.getMonth() + 1;
-      const prevPrefix = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+      const prevPrefix = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
       prevMonthScheduleMerged = schedule.filter(s => s.data.startsWith(prevPrefix));
     }
 
+    const currentDept = departments.find(d => d.id === currentDepartmentId);
+    const ruleSettings = currentDept?.settings || {
+      turnationApproach: 'arezzo_15',
+      maxConsecutiveDays: 5,
+      minRestDaysAfterCycle: 2,
+      allowNightForJolly: false,
+      requireRestAfterNight: true,
+      openOnWeekends: true,
+      openOnNights: true,
+      dailyCoverage: { morning: 3, afternoon: 3, night: 2 }
+    };
+
     const { schedule: newMonthSched, errors: genErrors } = generateSchedule(
-      year,
-      month,
-      operators,
-      shifts,
-      prevMonthScheduleMerged,
-      targetMonthLeaves,
-      schedule
+      year, month, operators, shifts, prevMonthScheduleMerged, targetMonthLeaves, schedule, ruleSettings
     );
 
     if (newMonthSched.length > 0) {
       setSchedule((prev: DailySchedule[]) => {
         const filtered = prev.filter(s => !s.data.startsWith(targetMonthPrefix));
-        return [...filtered, ...newMonthSched];
+        const schedulesWithDept = newMonthSched.map(s => ({ ...s, departmentId: currentDepartmentId || undefined }));
+        return [...filtered, ...schedulesWithDept];
       });
       setErrors(genErrors);
     }
@@ -322,24 +208,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const importHistoricalExcel = (fileData: ArrayBuffer): string => {
     try {
       const results = importExcel(fileData, operators, shifts);
-      if (results.length === 0) return 'Nessun foglio mensile riconosciuto nel file.';
-
       const allNewOps: Operator[] = [];
       const allNewScheds: DailySchedule[] = [];
 
       results.forEach(res => {
         res.operatorsParsed.forEach(op => {
           if (!allNewOps.some(o => o.id === op.id) && !operators.some(o => o.id === op.id)) {
-            allNewOps.push(op as Operator);
+            allNewOps.push({ ...op, departmentId: currentDepartmentId || undefined } as Operator);
           }
         });
-        allNewScheds.push(...res.schedules);
+        const schedulesWithDept = res.schedules.map(s => ({ ...s, departmentId: currentDepartmentId || undefined }));
+        allNewScheds.push(...schedulesWithDept);
       });
 
-      if (allNewOps.length > 0) {
-        setOperators((prev: Operator[]) => [...prev, ...allNewOps]);
-      }
-
+      if (allNewOps.length > 0) setOperators((prev: Operator[]) => [...prev, ...allNewOps]);
+      
       if (allNewScheds.length > 0) {
         setSchedule((prev: DailySchedule[]) => {
           const keysToRemove = new Set(allNewScheds.map(s => `${s.operatoreId}_${s.data}`));
@@ -352,319 +235,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setYear(results[0].year);
         setMonth(results[0].month);
       }
-
-      return `Importazione completata: caricati ${results.length} mesi, inseriti ${allNewOps.length} nuovi operatori e ${allNewScheds.length} record turni.`;
-    } catch (err: any) {
-      console.error(err);
-      return `Errore durante l'importazione: ${err.message || 'formato non supportato'}`;
+      return `Importati ${results.length} mesi, ${allNewOps.length} nuovi operatori e ${allNewScheds.length} turni.`;
+    } catch (e: any) {
+      return `Errore durante l'importazione: ${e.message}`;
     }
   };
 
   const exportExcelFile = () => {
     const currentPrefix = `${year}-${String(month).padStart(2, '0')}`;
     const currentMonthSchedule = schedule.filter(s => s.data.startsWith(currentPrefix));
-    
     exportToExcel(year, month, operators, shifts, currentMonthSchedule);
   };
 
-  const saveSupabaseSettings = async (url: string, key: string): Promise<boolean> => {
-    if (!url || !key) {
-      setSupabaseConfig({ url: '', anonKey: '', connected: false });
-      localStorage.removeItem('tsrm_supabase');
-      return false;
-    }
-
-    try {
-      const supabase = createClient(url, key);
-      const { error } = await supabase.from('operators').select('id').limit(1);
-      
-      if (error) {
-        if (error.code === '42P01') {
-          setSupabaseConfig({ url, anonKey: key, connected: true });
-          localStorage.setItem('tsrm_supabase', JSON.stringify({ url, anonKey: key, connected: true }));
-          return true;
-        }
-        setSupabaseConfig({ url: '', anonKey: '', connected: false });
-        return false;
-      }
-
-      setSupabaseConfig({ url, anonKey: key, connected: true });
-      localStorage.setItem('tsrm_supabase', JSON.stringify({ url, anonKey: key, connected: true }));
-      return true;
-    } catch (e) {
-      console.error('Errore durante il test di connessione:', e);
-      setSupabaseConfig({ url: '', anonKey: '', connected: false });
-      return false;
-    }
-  };
-
-  const syncData = async (): Promise<void> => {
-    if (!supabaseConfig.url || !supabaseConfig.anonKey || !currentCoordinatorId) {
-      throw new Error('Supabase non è configurato o l\'utente non è loggato.');
-    }
-    
-    try {
-      const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
-
-      const opsToUpsert = operators.map(o => ({ ...o, coordinatorId: currentCoordinatorId }));
-      const shiftsToUpsert = shifts.map(s => ({ ...s, coordinatorId: currentCoordinatorId }));
-      const scheduleToUpsert = schedule.map(sc => ({ ...sc, coordinatorId: currentCoordinatorId }));
-
-      const { error: opErr } = await supabase.from('operators').upsert(opsToUpsert);
-      if (opErr) throw new Error(`Errore sincronizzazione operatori: ${opErr.message}`);
-
-      const { error: shErr } = await supabase.from('shifts').upsert(shiftsToUpsert);
-      if (shErr) throw new Error(`Errore sincronizzazione turni: ${shErr.message}`);
-
-      if (scheduleToUpsert.length > 0) {
-        const { error: scErr } = await supabase.from('schedule').upsert(scheduleToUpsert);
-        if (scErr) throw new Error(`Errore sincronizzazione calendario: ${scErr.message}`);
-      }
-      setHasLocalChanges(false);
-    } catch (e: any) {
-      alert(`Errore Sincronizzazione Cloud: ${e.message}`);
-      console.error(e);
-      throw e;
-    }
-  };
-
-  const isInitialMount = React.useRef(true);
-
-  useEffect(() => {
-    if (supabaseConfig.connected && supabaseConfig.url && supabaseConfig.anonKey && currentCoordinatorId) {
-      const pullInitialData = async () => {
-        try {
-          const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
-          const { data: finalOps } = await supabase.from('operators').select('*').eq('coordinatorId', currentCoordinatorId);
-          const { data: finalShifts } = await supabase.from('shifts').select('*').eq('coordinatorId', currentCoordinatorId);
-          const { data: finalSchedule } = await supabase.from('schedule').select('*').eq('coordinatorId', currentCoordinatorId);
-
-          if (finalOps && finalOps.length > 0) {
-            _setOperators(finalOps);
-            localStorage.setItem('tsrm_operators', JSON.stringify(finalOps));
-          }
-          if (finalShifts && finalShifts.length > 0) {
-            _setShifts(finalShifts);
-            localStorage.setItem('tsrm_shifts', JSON.stringify(finalShifts));
-          }
-          if (finalSchedule) {
-            _setSchedule(finalSchedule);
-            localStorage.setItem('tsrm_schedule', JSON.stringify(finalSchedule));
-          }
-        } catch (e) {
-          console.error("Errore nel pull iniziale:", e);
-        }
-      };
-      pullInitialData();
-    }
-  }, [supabaseConfig.connected, currentCoordinatorId]);
-
-  useEffect(() => {
-    if (!supabaseConfig.connected || !supabaseConfig.url || !supabaseConfig.anonKey || !currentCoordinatorId || userRole !== 'coordinatore') return;
-    
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-    if (!hasLocalChanges) return;
-
-    const delayDebounceFn = setTimeout(async () => {
-      try {
-        const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
-        
-        const opsToUpsert = operators.map(o => ({ ...o, coordinatorId: currentCoordinatorId }));
-        const shiftsToUpsert = shifts.map(s => ({ ...s, coordinatorId: currentCoordinatorId }));
-        const scheduleToUpsert = schedule.map(sc => ({ ...sc, coordinatorId: currentCoordinatorId }));
-
-        const { error: err1 } = await supabase.from('operators').upsert(opsToUpsert);
-        if (err1) throw new Error('Operators: ' + err1.message);
-        
-        const { error: err2 } = await supabase.from('shifts').upsert(shiftsToUpsert);
-        if (err2) throw new Error('Shifts: ' + err2.message);
-        
-        if (scheduleToUpsert.length > 0) {
-          const { error: err3 } = await supabase.from('schedule').upsert(scheduleToUpsert);
-          if (err3) throw new Error('Schedule: ' + err3.message);
-        }
-        console.log('Salvataggio automatico cloud completato con successo.');
-      } catch (e: any) {
-        console.error('Errore salvataggio automatico cloud (Probabilmente mancano le tabelle nel database!):', e.message);
-      }
-    }, 2500);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [operators, shifts, schedule, supabaseConfig.connected, currentCoordinatorId, userRole]);
-
-  // Autenticazione Supabase
-  const signUp = async (email: string, password: string): Promise<void> => {
-    if (!supabaseConfig.url || !supabaseConfig.anonKey) throw new Error("Supabase non configurato.");
-    const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) throw new Error(error.message);
-    
-    const authUser = data?.user;
-    if (authUser) {
-      // Registra associazione coordinatore
-      const { error: assocErr } = await supabase
-        .from('coordinators')
-        .upsert({ id: authUser.id, email: email.trim().toLowerCase() });
-      if (assocErr) throw new Error(`Associazione coordinatore fallita: ${assocErr.message}`);
-
-      // Invia dati locali come seed per l'account
-      const opsToUpsert = operators.map(o => ({ ...o, coordinatorId: authUser.id }));
-      const shiftsToUpsert = shifts.map(s => ({ ...s, coordinatorId: authUser.id }));
-      const scheduleToUpsert = schedule.map(sc => ({ ...sc, coordinatorId: authUser.id }));
-
-      await supabase.from('operators').upsert(opsToUpsert);
-      await supabase.from('shifts').upsert(shiftsToUpsert);
-      if (scheduleToUpsert.length > 0) {
-        await supabase.from('schedule').upsert(scheduleToUpsert);
-      }
-
-      setUser(authUser);
-      setUserRole('coordinatore');
-      setCurrentCoordinatorId(authUser.id);
-      localStorage.setItem('tsrm_user', JSON.stringify(authUser));
-      localStorage.setItem('tsrm_user_role', 'coordinatore');
-      localStorage.setItem('tsrm_coordinator_id', authUser.id);
-    }
-  };
-
-  const signIn = async (email: string, password: string): Promise<void> => {
-    if (!supabaseConfig.url || !supabaseConfig.anonKey) throw new Error("Supabase non configurato.");
-    const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
-    
-    const authUser = data?.user;
-    if (authUser) {
-      await supabase.from('coordinators').upsert({ id: authUser.id, email: email.trim().toLowerCase() });
-
-      setUser(authUser);
-      setUserRole('coordinatore');
-      setCurrentCoordinatorId(authUser.id);
-      localStorage.setItem('tsrm_user', JSON.stringify(authUser));
-      localStorage.setItem('tsrm_user_role', 'coordinatore');
-      localStorage.setItem('tsrm_coordinator_id', authUser.id);
-
-      // Scarica dati coordinatore dal cloud
-      const { data: ops } = await supabase.from('operators').select('*').eq('coordinatorId', authUser.id);
-      const { data: shs } = await supabase.from('shifts').select('*').eq('coordinatorId', authUser.id);
-      const { data: sched } = await supabase.from('schedule').select('*').eq('coordinatorId', authUser.id);
-
-      if (ops && ops.length > 0) {
-        setOperators(ops);
-        localStorage.setItem('tsrm_operators', JSON.stringify(ops));
-      } else {
-        const opsToUpsert = INITIAL_OPERATORS.map(o => ({ ...o, coordinatorId: authUser.id }));
-        await supabase.from('operators').upsert(opsToUpsert);
-        setOperators(INITIAL_OPERATORS);
-        localStorage.setItem('tsrm_operators', JSON.stringify(INITIAL_OPERATORS));
-      }
-
-      if (shs && shs.length > 0) {
-        setShifts(shs);
-        localStorage.setItem('tsrm_shifts', JSON.stringify(shs));
-      } else {
-        const shiftsToUpsert = DEFAULT_SHIFTS.map(s => ({ ...s, coordinatorId: authUser.id }));
-        await supabase.from('shifts').upsert(shiftsToUpsert);
-        setShifts(DEFAULT_SHIFTS);
-        localStorage.setItem('tsrm_shifts', JSON.stringify(DEFAULT_SHIFTS));
-      }
-
-      if (sched) {
-        setSchedule(sched);
-        localStorage.setItem('tsrm_schedule', JSON.stringify(sched));
-      } else {
-        setSchedule([]);
-        localStorage.setItem('tsrm_schedule', '[]');
-      }
-    }
-  };
-
-  const signInAsOperator = async (coordinatorEmail: string): Promise<void> => {
-    if (!supabaseConfig.url || !supabaseConfig.anonKey) throw new Error("Supabase non configurato.");
-    const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
-
-    const { data, error } = await supabase
-      .from('coordinators')
-      .select('id')
-      .eq('email', coordinatorEmail.trim().toLowerCase())
-      .single();
-
-    if (error || !data) {
-      throw new Error("Nessun coordinatore registrato con questa email. Controlla l'indirizzo.");
-    }
-
-    const coordId = data.id;
-    setUser(null);
-    setUserRole('operatore');
-    setCurrentCoordinatorId(coordId);
-    localStorage.setItem('tsrm_user_role', 'operatore');
-    localStorage.setItem('tsrm_coordinator_id', coordId);
-
-    // Scarica i dati dell'operatore in sola lettura
-    const { data: ops } = await supabase.from('operators').select('*').eq('coordinatorId', coordId);
-    const { data: shs } = await supabase.from('shifts').select('*').eq('coordinatorId', coordId);
-    const { data: sched } = await supabase.from('schedule').select('*').eq('coordinatorId', coordId);
-
-    if (ops && ops.length > 0) {
-      setOperators(ops);
-      localStorage.setItem('tsrm_operators', JSON.stringify(ops));
-    }
-    if (shs && shs.length > 0) {
-      setShifts(shs);
-      localStorage.setItem('tsrm_shifts', JSON.stringify(shs));
-    }
-    if (sched) {
-      setSchedule(sched);
-      localStorage.setItem('tsrm_schedule', JSON.stringify(sched));
-    }
-    setActiveView('calendario');
-  };
-
-  const logout = async (): Promise<void> => {
-    setUser(null);
-    setUserRole(null);
-    setCurrentCoordinatorId(null);
-    localStorage.removeItem('tsrm_user');
-    localStorage.removeItem('tsrm_user_role');
-    localStorage.removeItem('tsrm_coordinator_id');
-
-    setOperators(INITIAL_OPERATORS);
-    setShifts(DEFAULT_SHIFTS);
-    setSchedule([]);
-  };
-
-  const resetDatabase = () => {
-    localStorage.removeItem('tsrm_operators');
-    localStorage.removeItem('tsrm_shifts');
-    localStorage.removeItem('tsrm_schedule');
-    localStorage.removeItem('tsrm_supabase');
-    localStorage.removeItem('tsrm_user');
-    localStorage.removeItem('tsrm_user_role');
-    localStorage.removeItem('tsrm_coordinator_id');
-    setOperators(INITIAL_OPERATORS);
-    setShifts(DEFAULT_SHIFTS);
-    setSchedule([]);
-    setSchedule([]);
-    setUser(null);
-    setUserRole(null);
-    setCurrentCoordinatorId(null);
-    setYear(2026);
-    setMonth(1);
-  };
 
   return (
     <AppContext.Provider value={{
-      year, month, activeView, operators, shifts, schedule, errors, supabaseConfig, highlightedDay,
-      user, userRole, geminiApiKey, setGeminiApiKey,
-      setYear, setMonth, setActiveView, setHighlightedDay,
+      year, setYear, month, setMonth, activeView, setActiveView,
+      highlightedDay, setHighlightedDay, departments, setDepartments,
+      currentDepartmentId, setCurrentDepartmentId, updateDepartment,
+      operators, shifts, schedule, shiftRequests, errors,
       addOperator, updateOperator, deleteOperator,
+      addRequest, updateRequestStatus,
       addShiftType, updateShiftType, deleteShiftType,
       assignShift, assignMultipleShifts, runAutoGeneration, clearMonthSchedule,
-      importHistoricalExcel, exportExcelFile, saveSupabaseSettings, syncData, resetDatabase,
-      signUp, signIn, signInAsOperator, logout
+      importHistoricalExcel, exportExcelFile,
+      user, userRole, supabaseConfig, saveSupabaseSettings, syncData, signUp, signIn, logout,
+      geminiApiKey, setGeminiApiKey
     }}>
       {children}
     </AppContext.Provider>

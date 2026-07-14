@@ -352,9 +352,9 @@ export const CalendarView: React.FC = () => {
           if (currentDayShift !== 'L') return false;
 
           // Must satisfy limitations
-          if (prevShiftCat === 'notte' && op.escludiNotti) return false;
-          if (prevShiftCat !== 'mattina' && op.soloMattina) return false;
-          if (isFest && op.escludiWeekend) return false;
+          if (prevShiftCat === 'notte' && op.preferences?.escludiNotti) return false;
+          if (prevShiftCat !== 'mattina' && op.preferences?.soloMattina) return false;
+          if (isFest && op.preferences?.escludiWeekend) return false;
 
           // Must satisfy rest constraints
           const yesterdayShift = d === 1 ? 'L' : getCurrentShift(op.id, d - 1);

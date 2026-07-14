@@ -5,7 +5,7 @@ import { Plus, Edit2, Trash2, Check } from 'lucide-react';
 import { SupabaseSettings } from './SupabaseSettings';
 
 export const LegendManager: React.FC = () => {
-  const { shifts, addShiftType, updateShiftType, deleteShiftType, resetDatabase } = useApp();
+  const { shifts, addShiftType, updateShiftType, deleteShiftType } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingShift, setEditingShift] = useState<ShiftType | null>(null);
 
@@ -64,11 +64,6 @@ export const LegendManager: React.FC = () => {
     setIsModalOpen(false);
   };
 
-  const handleReset = () => {
-    if (confirm('ATTENZIONE: Questo cancellerà tutti i turni programmati e ripristinerà gli operatori e la legenda al file Excel predefinito del 2026. Vuoi continuare?')) {
-      resetDatabase();
-    }
-  };
 
   return (
     <div className="flex-1 overflow-y-auto p-8 bg-slate-50">
@@ -149,19 +144,6 @@ export const LegendManager: React.FC = () => {
           {/* Cloud Database (Supabase) */}
           <SupabaseSettings />
 
-          {/* Database Reset Action */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2">Ripristino Dati</h4>
-            <p className="text-xs text-slate-500 leading-relaxed mb-4">
-              Puoi azzerare il database locale in qualsiasi momento per ripristinare la legenda originale e cancellare tutte le modifiche inserite.
-            </p>
-            <button
-              onClick={handleReset}
-              className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all"
-            >
-              Reset di Fabbrica
-            </button>
-          </div>
         </div>
       </div>
 

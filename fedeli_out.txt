@@ -1,0 +1,12 @@
+FEDELI 2026:
+Mese 3: N L L P M N L L J J J J J P M N L L P M N L L J J J J J P M N 
+Mese 4: L L P M N L L J J J J J P M N L L P M N L L J J J J J P M N 
+Mese 5: L L P M N L L J J J J J P M N L L P M N L L J J J J J P M N L 
+Mese 6: L P M N L L J J J J J P M N L L P M N L L J J J J J P M N L 
+Mese 7: L P M N L L J J J J J P M N L L P M N L L J J J J J P M N L L 
+Mese 8: P M N L L J J J J J P M N L L P M N L L J J J J J P M N L L P 
+Mese 9: M N L L J J J J J P M N L L P M N L L J J J J J P M N L L P 
+Mese 10: M N L L J J J J J P M N L L P M N L L J J J J J P M N L L P M 
+Mese 11: N L L J J J J J P M N L L P M N L L J J J J J P M N L L P M 
+Mese 12: N L L J J J J J P M N L L P M N L L J J J J J P M N L L P M N 
+

@@ -1,18 +1,16 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Activity, KeyRound, Mail, UserCheck, ShieldAlert, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Activity, KeyRound, Mail, ShieldAlert, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export const LoginScreen: React.FC = () => {
-  const { signIn, signUp, signInAsOperator } = useApp();
+  const { signIn, signUp } = useApp();
   
-  const [role, setRole] = useState<'coordinatore' | 'operatore'>('coordinatore');
   const [isRegister, setIsRegister] = useState(false);
   
   // Form fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [coordEmail, setCoordEmail] = useState('');
   
   // UX States
   const [loading, setLoading] = useState(false);
@@ -24,14 +22,10 @@ export const LoginScreen: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      if (role === 'coordinatore') {
-        if (isRegister) {
-          await signUp(email, password);
-        } else {
-          await signIn(email, password);
-        }
+      if (isRegister) {
+        await signUp(email, password);
       } else {
-        await signInAsOperator(coordEmail);
+        await signIn(email, password);
       }
     } catch (err: any) {
       console.error(err);
@@ -63,37 +57,7 @@ export const LoginScreen: React.FC = () => {
           </p>
         </div>
 
-        {/* Role Selector Tabs */}
-        <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-950/60 rounded-2xl border border-slate-800/40 mb-6">
-          <button
-            type="button"
-            onClick={() => {
-              setRole('coordinatore');
-              setErrorMsg(null);
-            }}
-            className={`py-2.5 rounded-xl text-xs font-bold transition-all ${
-              role === 'coordinatore'
-                ? 'bg-slate-900 text-white shadow-md border border-slate-800'
-                : 'text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            Coordinatore (Edit)
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setRole('operatore');
-              setErrorMsg(null);
-            }}
-            className={`py-2.5 rounded-xl text-xs font-bold transition-all ${
-              role === 'operatore'
-                ? 'bg-slate-900 text-white shadow-md border border-slate-800'
-                : 'text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            Operatore (Read-Only)
-          </button>
-        </div>
+
 
         {/* Error Alert Box */}
         {errorMsg && (
@@ -104,83 +68,58 @@ export const LoginScreen: React.FC = () => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {role === 'coordinatore' ? (
-            <>
-              {/* Email Input */}
-              <div className="flex flex-col space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Indirizzo Email</label>
-                <div className="relative flex items-center">
-                  <Mail className="absolute left-3 w-4 h-4 text-slate-500" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="coordinatore@azienda.it"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all"
-                  />
-                </div>
-              </div>
+          {/* Email Input */}
+          <div className="flex flex-col space-y-1.5">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Indirizzo Email</label>
+            <div className="relative flex items-center">
+              <Mail className="absolute left-3 w-4 h-4 text-slate-500" />
+              <input
+                type="email"
+                required
+                placeholder="coordinatore@azienda.it"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full pl-10 pr-3 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all"
+              />
+            </div>
+          </div>
 
-              {/* Password Input */}
-              <div className="flex flex-col space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Password</label>
-                <div className="relative flex items-center">
-                  <KeyRound className="absolute left-3 w-4 h-4 text-slate-500" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-10 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 text-slate-500 hover:text-slate-300"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
+          {/* Password Input */}
+          <div className="flex flex-col space-y-1.5">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Password</label>
+            <div className="relative flex items-center">
+              <KeyRound className="absolute left-3 w-4 h-4 text-slate-500" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full pl-10 pr-10 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 text-slate-500 hover:text-slate-300"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
 
-              {/* Toggle Register / Login */}
-              <div className="flex justify-end pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsRegister(!isRegister);
-                    setErrorMsg(null);
-                  }}
-                  className="text-[11px] font-semibold text-sky-400 hover:text-sky-300 transition-colors"
-                >
-                  {isRegister ? 'Hai già un account? Accedi' : 'Nuovo coordinatore? Registrati'}
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Coordinator Email Input for Operator */}
-              <div className="flex flex-col space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email del Coordinatore</label>
-                <div className="relative flex items-center">
-                  <UserCheck className="absolute left-3 w-4 h-4 text-slate-500" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="inserisci la mail del tuo coordinatore"
-                    value={coordEmail}
-                    onChange={(e) => setCoordEmail(e.target.value)}
-                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:ring-sky-500/20 focus:border-sky-500 focus:outline-none transition-all"
-                  />
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-500 leading-relaxed text-center pt-1.5">
-                Gli operatori accedono in modalità consultazione (sola lettura) senza bisogno di password, inserendo l'indirizzo email del coordinatore del reparto.
-              </p>
-            </>
-          )}
+          {/* Toggle Register / Login */}
+          <div className="flex justify-end pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setIsRegister(!isRegister);
+                setErrorMsg(null);
+              }}
+              className="text-[11px] font-semibold text-sky-400 hover:text-sky-300 transition-colors"
+            >
+              {isRegister ? 'Hai già un account? Accedi' : 'Nuovo coordinatore? Registrati'}
+            </button>
+          </div>
 
           {/* Action Button */}
           <button
@@ -195,11 +134,7 @@ export const LoginScreen: React.FC = () => {
               </>
             ) : (
               <span>
-                {role === 'operatore'
-                  ? 'Visualizza Turni'
-                  : isRegister
-                  ? 'Registra e Inizializza'
-                  : 'Accedi come Coordinatore'}
+                {isRegister ? 'Registra e Inizializza' : 'Accedi come Coordinatore'}
               </span>
             )}
           </button>

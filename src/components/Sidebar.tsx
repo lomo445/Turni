@@ -8,16 +8,18 @@ import {
   BarChart3, 
   FileSpreadsheet, 
   Settings,
+  Sliders,
   Activity,
   AlertTriangle,
   Cloud,
   CloudOff,
   RefreshCw,
-  LogOut
+  LogOut,
+  Send
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
-  const { activeView, setActiveView, errors, supabaseConfig, syncData, user, userRole, logout } = useApp();
+  const { activeView, setActiveView, errors, shiftRequests, supabaseConfig, syncData, user, userRole, logout } = useApp();
   const [syncing, setSyncing] = React.useState(false);
   const [syncError, setSyncError] = React.useState<string | null>(null);
 
@@ -40,7 +42,9 @@ export const Sidebar: React.FC = () => {
   const rawMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'calendario', label: 'Calendario Turni', icon: Calendar },
+    { id: 'richieste', label: 'Richieste Dipendenti', icon: Send },
     { id: 'operatori', label: 'Operatori', icon: Users },
+    { id: 'regole', label: 'Regole Motore', icon: Sliders },
     { id: 'generazione', label: 'Generazione Automatica', icon: Wand2 },
     { id: 'statistiche', label: 'Statistiche', icon: BarChart3 },
     { id: 'importa', label: 'Importa Excel', icon: FileSpreadsheet },
@@ -55,6 +59,7 @@ export const Sidebar: React.FC = () => {
   });
 
   const criticalErrors = errors.filter(e => e.tipo === 'critico');
+  const pendingRequests = shiftRequests.filter(r => r.stato === 'in_attesa');
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 text-slate-200 flex flex-col no-print">
@@ -94,6 +99,12 @@ export const Sidebar: React.FC = () => {
               {item.id === 'dashboard' && criticalErrors.length > 0 && (
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white animate-bounce">
                   {criticalErrors.length}
+                </span>
+              )}
+
+              {item.id === 'richieste' && pendingRequests.length > 0 && (
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white shadow shadow-amber-500/50">
+                  {pendingRequests.length}
                 </span>
               )}
             </button>
