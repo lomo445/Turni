@@ -82,37 +82,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeView, setActiveView] = useState<string>('dashboard');
 
   // Load state from localStorage or use defaults
-  const [operators, setOperators] = useState<Operator[]>(() => {
-    const saved = localStorage.getItem('tsrm_operators');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      } catch (e) {
-        console.error("Errore nel caricamento degli operatori da localStorage:", e);
-      }
+  const [operators, _setOperators] = useState<Operator[]>(() => {
+    try {
+      const stored = localStorage.getItem('tsrm_operators');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
     }
     return INITIAL_OPERATORS;
   });
 
-  const [shifts, setShifts] = useState<ShiftType[]>(() => {
-    const saved = localStorage.getItem('tsrm_shifts');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      } catch (e) {
-        console.error("Errore nel caricamento dei tipi turno da localStorage:", e);
-      }
+  const [shifts, _setShifts] = useState<ShiftType[]>(() => {
+    try {
+      const stored = localStorage.getItem('tsrm_shifts');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
     }
     return DEFAULT_SHIFTS;
   });
 
-  const [schedule, setSchedule] = useState<DailySchedule[]>(() => {
-    const saved = localStorage.getItem('tsrm_schedule');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
+  const [schedule, _setSchedule] = useState<DailySchedule[]>(() => {
+    try {
+      const stored = localStorage.getItem('tsrm_schedule');
+      if (stored) {
+        const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
           const validParsed = parsed.filter((s: any) => s && s.data && typeof s.data === 'string' && s.operatoreId && s.codiceTurno);
           const hasJuly = validParsed.some((s: any) => s.data.startsWith('2026-07'));
@@ -123,13 +117,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
           return validParsed;
         }
-      } catch (e) {
-        console.error("Errore nel caricamento dello storico calendario da localStorage:", e);
       }
+    } catch (e) {
+      console.error("Errore nel caricamento dello storico calendario da localStorage:", e);
     }
     localStorage.setItem('tsrm_schedule', JSON.stringify(JULY_2026_SCHEDULE));
     return JULY_2026_SCHEDULE;
   });
+
+  const [hasLocalChanges, setHasLocalChanges] = useState(false);
+
+  const setOperators = (val: any) => {
+    if (typeof val === 'function') {
+      _setOperators((prev: Operator[]) => {
+        const newVal = val(prev);
+        return newVal;
+      });
+    } else {
+      _setOperators(val);
+    }
+    setHasLocalChanges(true);
+  };
+
+  const setShifts = (val: any) => {
+    if (typeof val === 'function') {
+      _setShifts((prev: ShiftType[]) => {
+        const newVal = val(prev);
+        return newVal;
+      });
+    } else {
+      _setShifts(val);
+    }
+    setHasLocalChanges(true);
+  };
+
+  const setSchedule = (val: any) => {
+    if (typeof val === 'function') {
+      _setSchedule((prev: DailySchedule[]) => {
+        const newVal = val(prev);
+        return newVal;
+      });
+    } else {
+      _setSchedule(val);
+    }
+    setHasLocalChanges(true);
+  };
 
   const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>({
     url: 'https://oqglyzmfbtgznybccpnf.supabase.co',
@@ -154,7 +186,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [errors, setErrors] = useState<GenerationError[]>([]);
 
-  // Persist state to localStorage on change
   useEffect(() => {
     localStorage.setItem('tsrm_operators', JSON.stringify(operators));
   }, [operators]);
@@ -179,24 +210,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('tsrm_month', String(month));
   }, [month]);
 
-  // Run validation automatically when schedule or metadata changes
   useEffect(() => {
     const errs = validateSchedule(year, month, schedule, operators, shifts);
     setErrors(errs);
   }, [year, month, schedule, operators, shifts]);
 
-  // Operators Actions
   const addOperator = (op: Operator) => {
-    setOperators(prev => [...prev, op]);
+    setOperators((prev: Operator[]) => [...prev, op]);
   };
 
   const updateOperator = (op: Operator) => {
-    setOperators(prev => prev.map(o => o.id === op.id ? op : o));
+    setOperators((prev: Operator[]) => prev.map(o => o.id === op.id ? op : o));
   };
 
   const deleteOperator = async (id: string) => {
-    setOperators(prev => prev.filter(o => o.id !== id));
-    setSchedule(prev => prev.filter(s => s.operatoreId !== id));
+    setOperators((prev: Operator[]) => prev.filter(o => o.id !== id));
+    setSchedule((prev: DailySchedule[]) => prev.filter(s => s.operatoreId !== id));
     if (supabaseConfig.connected && supabaseConfig.url && supabaseConfig.anonKey && currentCoordinatorId) {
       const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
       await supabase.from('operators').delete().eq('id', id).eq('coordinatorId', currentCoordinatorId);
@@ -204,26 +233,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Shifts Actions
   const addShiftType = (s: ShiftType) => {
-    setShifts(prev => [...prev, s]);
+    setShifts((prev: ShiftType[]) => [...prev, s]);
   };
 
   const updateShiftType = (s: ShiftType) => {
-    setShifts(prev => prev.map(st => st.codice === s.codice ? s : st));
+    setShifts((prev: ShiftType[]) => prev.map(st => st.codice === s.codice ? s : st));
   };
 
   const deleteShiftType = async (code: string) => {
-    setShifts(prev => prev.filter(st => st.codice !== code));
+    setShifts((prev: ShiftType[]) => prev.filter(st => st.codice !== code));
     if (supabaseConfig.connected && supabaseConfig.url && supabaseConfig.anonKey && currentCoordinatorId) {
       const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
       await supabase.from('shifts').delete().eq('codice', code).eq('coordinatorId', currentCoordinatorId);
     }
   };
 
-  // Calendar editing Actions
   const assignShift = async (opId: string, dateStr: string, shiftCode: string) => {
-    setSchedule(prev => {
+    setSchedule((prev: DailySchedule[]) => {
       const filtered = prev.filter(s => !(s.operatoreId === opId && s.data === dateStr));
       if (!shiftCode) return filtered;
       return [...filtered, {
@@ -241,25 +268,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const assignMultipleShifts = (schedulesToAdd: DailySchedule[]) => {
-    setSchedule(prev => {
+    setSchedule((prev: DailySchedule[]) => {
       const keysToRemove = new Set(schedulesToAdd.map(s => `${s.operatoreId}_${s.data}`));
       const filtered = prev.filter(s => !keysToRemove.has(`${s.operatoreId}_${s.data}`));
       return [...filtered, ...schedulesToAdd];
     });
   };
 
-  // Run Automatic generation for the selected year & month
   const runAutoGeneration = (prevMonthSchedule: DailySchedule[]) => {
-    // Collect current leaves/ferie and pre-assigned working shifts for the target month (everything that is not 'L')
     const targetMonthPrefix = `${year}-${String(month).padStart(2, '0')}`;
     const targetMonthLeaves = schedule.filter(s => 
       s.data.startsWith(targetMonthPrefix) && s.codiceTurno !== 'L'
     );
 
-    // Merge previous month data provided or read from schedule state
     let prevMonthScheduleMerged = prevMonthSchedule;
     if (prevMonthScheduleMerged.length === 0) {
-      // Find in state
       const prevDate = new Date(year, month - 2, 1);
       const prevYear = prevDate.getFullYear();
       const prevMonth = prevDate.getMonth() + 1;
@@ -278,8 +301,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     if (newMonthSched.length > 0) {
-      // Keep other months' schedules, overwrite the target month
-      setSchedule(prev => {
+      setSchedule((prev: DailySchedule[]) => {
         const filtered = prev.filter(s => !s.data.startsWith(targetMonthPrefix));
         return [...filtered, ...newMonthSched];
       });
@@ -289,7 +311,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const clearMonthSchedule = async (y: number, m: number) => {
     const targetMonthPrefix = `${y}-${String(m).padStart(2, '0')}`;
-    setSchedule(prev => prev.filter(s => !s.data.startsWith(targetMonthPrefix)));
+    setSchedule((prev: DailySchedule[]) => prev.filter(s => !s.data.startsWith(targetMonthPrefix)));
     
     if (supabaseConfig.connected && supabaseConfig.url && supabaseConfig.anonKey && currentCoordinatorId) {
       const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
@@ -297,42 +319,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Import historical Excel
   const importHistoricalExcel = (fileData: ArrayBuffer): string => {
     try {
       const results = importExcel(fileData, operators, shifts);
       if (results.length === 0) return 'Nessun foglio mensile riconosciuto nel file.';
 
-      // Extract new operators found in Excel
       const allNewOps: Operator[] = [];
       const allNewScheds: DailySchedule[] = [];
 
       results.forEach(res => {
-        // Collect new operators
         res.operatorsParsed.forEach(op => {
           if (!allNewOps.some(o => o.id === op.id) && !operators.some(o => o.id === op.id)) {
             allNewOps.push(op as Operator);
           }
         });
-        // Collect schedules
         allNewScheds.push(...res.schedules);
       });
 
-      // Insert new operators
       if (allNewOps.length > 0) {
-        setOperators(prev => [...prev, ...allNewOps]);
+        setOperators((prev: Operator[]) => [...prev, ...allNewOps]);
       }
 
-      // Merge schedules (overwrite matching days)
       if (allNewScheds.length > 0) {
-        setSchedule(prev => {
+        setSchedule((prev: DailySchedule[]) => {
           const keysToRemove = new Set(allNewScheds.map(s => `${s.operatoreId}_${s.data}`));
           const filtered = prev.filter(s => !keysToRemove.has(`${s.operatoreId}_${s.data}`));
           return [...filtered, ...allNewScheds];
         });
       }
 
-      // Set view to loaded year/month of the first parsed result
       if (results[0]) {
         setYear(results[0].year);
         setMonth(results[0].month);
@@ -345,7 +360,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Export current month to Excel file
   const exportExcelFile = () => {
     const currentPrefix = `${year}-${String(month).padStart(2, '0')}`;
     const currentMonthSchedule = schedule.filter(s => s.data.startsWith(currentPrefix));
@@ -353,7 +367,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     exportToExcel(year, month, operators, shifts, currentMonthSchedule);
   };
 
-  // Supabase mock / settings setup
   const saveSupabaseSettings = async (url: string, key: string): Promise<boolean> => {
     if (!url || !key) {
       setSupabaseConfig({ url: '', anonKey: '', connected: false });
@@ -367,12 +380,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       if (error) {
         if (error.code === '42P01') {
-          // Le tabelle non esistono ancora, ma le credenziali sono valide!
           setSupabaseConfig({ url, anonKey: key, connected: true });
           localStorage.setItem('tsrm_supabase', JSON.stringify({ url, anonKey: key, connected: true }));
           return true;
         }
-        // Per qualsiasi altro tipo di errore (credenziali errate, CORS, ecc.)
         setSupabaseConfig({ url: '', anonKey: '', connected: false });
         return false;
       }
@@ -387,7 +398,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Sincronizzazione reale multi-tenant con Supabase
   const syncData = async (): Promise<void> => {
     if (!supabaseConfig.url || !supabaseConfig.anonKey || !currentCoordinatorId) {
       throw new Error('Supabase non è configurato o l\'utente non è loggato.');
@@ -396,39 +406,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
 
-      // 1. Legge lo stato sul cloud filtrato per questo coordinatore
-      const { data: cloudOps, error: errOps } = await supabase
-        .from('operators')
-        .select('*')
-        .eq('coordinatorId', currentCoordinatorId);
-
-      if (errOps) {
-        if (errOps.code === '42P01') {
-          throw new Error("Le tabelle non esistono ancora in Supabase. Per favore, esegui lo script SQL fornito nelle istruzioni prima di procedere.");
-        }
-        throw new Error(`Errore di connessione Supabase: ${errOps.message}`);
-      }
-
       const opsToUpsert = operators.map(o => ({ ...o, coordinatorId: currentCoordinatorId }));
       const shiftsToUpsert = shifts.map(s => ({ ...s, coordinatorId: currentCoordinatorId }));
       const scheduleToUpsert = schedule.map(sc => ({ ...sc, coordinatorId: currentCoordinatorId }));
 
-      // 2. Se il cloud è vuoto per questo coordinatore, invia (PUSH) i dati locali
-      if (!cloudOps || cloudOps.length === 0) {
-        const { error: opErr } = await supabase.from('operators').upsert(opsToUpsert);
-        if (opErr) throw new Error(`Errore caricamento operatori: ${opErr.message}`);
-        
-        const { error: shErr } = await supabase.from('shifts').upsert(shiftsToUpsert);
-        if (shErr) throw new Error(`Errore caricamento turni: ${shErr.message}`);
-        
-        if (scheduleToUpsert.length > 0) {
-          const { error: scErr } = await supabase.from('schedule').upsert(scheduleToUpsert);
-          if (scErr) throw new Error(`Errore caricamento calendario: ${scErr.message}`);
-        }
-        return;
-      }
-
-      // 3. Se il cloud contiene dati, esegui l'unione (UPSERT locale -> cloud e poi PULL cloud -> locale)
       const { error: opErr } = await supabase.from('operators').upsert(opsToUpsert);
       if (opErr) throw new Error(`Errore sincronizzazione operatori: ${opErr.message}`);
 
@@ -439,37 +420,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const { error: scErr } = await supabase.from('schedule').upsert(scheduleToUpsert);
         if (scErr) throw new Error(`Errore sincronizzazione calendario: ${scErr.message}`);
       }
-
-      // Riscarica i dati finali consolidati
-      const { data: finalOps } = await supabase.from('operators').select('*').eq('coordinatorId', currentCoordinatorId);
-      const { data: finalShifts } = await supabase.from('shifts').select('*').eq('coordinatorId', currentCoordinatorId);
-      const { data: finalSchedule } = await supabase.from('schedule').select('*').eq('coordinatorId', currentCoordinatorId);
-
-      if (finalOps && finalOps.length > 0) {
-        setOperators(finalOps);
-        localStorage.setItem('tsrm_operators', JSON.stringify(finalOps));
-      }
-      if (finalShifts && finalShifts.length > 0) {
-        setShifts(finalShifts);
-        localStorage.setItem('tsrm_shifts', JSON.stringify(finalShifts));
-      }
-      if (finalSchedule) {
-        setSchedule(finalSchedule);
-        localStorage.setItem('tsrm_schedule', JSON.stringify(finalSchedule));
-      }
+      setHasLocalChanges(false);
     } catch (e: any) {
       alert(`Errore Sincronizzazione Cloud: ${e.message}`);
       console.error(e);
+      throw e;
     }
   };
 
-  // Debounced Auto-Sync in background (attivo solo se connesso e con coordinatore autenticato)
+  const isInitialMount = React.useRef(true);
+
+  useEffect(() => {
+    if (supabaseConfig.connected && supabaseConfig.url && supabaseConfig.anonKey && currentCoordinatorId) {
+      const pullInitialData = async () => {
+        try {
+          const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+          const { data: finalOps } = await supabase.from('operators').select('*').eq('coordinatorId', currentCoordinatorId);
+          const { data: finalShifts } = await supabase.from('shifts').select('*').eq('coordinatorId', currentCoordinatorId);
+          const { data: finalSchedule } = await supabase.from('schedule').select('*').eq('coordinatorId', currentCoordinatorId);
+
+          if (finalOps && finalOps.length > 0) {
+            _setOperators(finalOps);
+            localStorage.setItem('tsrm_operators', JSON.stringify(finalOps));
+          }
+          if (finalShifts && finalShifts.length > 0) {
+            _setShifts(finalShifts);
+            localStorage.setItem('tsrm_shifts', JSON.stringify(finalShifts));
+          }
+          if (finalSchedule) {
+            _setSchedule(finalSchedule);
+            localStorage.setItem('tsrm_schedule', JSON.stringify(finalSchedule));
+          }
+        } catch (e) {
+          console.error("Errore nel pull iniziale:", e);
+        }
+      };
+      pullInitialData();
+    }
+  }, [supabaseConfig.connected, currentCoordinatorId]);
+
   useEffect(() => {
     if (!supabaseConfig.connected || !supabaseConfig.url || !supabaseConfig.anonKey || !currentCoordinatorId || userRole !== 'coordinatore') return;
+    
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    if (!hasLocalChanges) return;
 
     const delayDebounceFn = setTimeout(async () => {
       try {
         const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+        
         const opsToUpsert = operators.map(o => ({ ...o, coordinatorId: currentCoordinatorId }));
         const shiftsToUpsert = shifts.map(s => ({ ...s, coordinatorId: currentCoordinatorId }));
         const scheduleToUpsert = schedule.map(sc => ({ ...sc, coordinatorId: currentCoordinatorId }));
