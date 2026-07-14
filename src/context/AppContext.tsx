@@ -46,7 +46,7 @@ interface AppContextType {
   supabaseConfig: SupabaseConfig;
   saveSupabaseSettings: (url: string, key: string) => Promise<boolean>;
   syncData: () => Promise<void>;
-  signUp: (email: string, password: string, role: 'coordinatore' | 'operatore') => Promise<void>;
+  signUp: (email: string, password: string, role: 'coordinatore' | 'operatore', departmentId?: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   logout: () => void;
   geminiApiKey: string | null;

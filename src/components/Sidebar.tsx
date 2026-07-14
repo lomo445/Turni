@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
-  const { activeView, setActiveView, errors, shiftRequests, supabaseConfig, syncData, user, userRole, logout } = useApp();
+  const { activeView, setActiveView, errors, shiftRequests, supabaseConfig, syncData, userRole, logout, departments, currentDepartmentId, setCurrentDepartmentId } = useApp();
   const [syncing, setSyncing] = React.useState(false);
   const [syncError, setSyncError] = React.useState<string | null>(null);
 
@@ -64,16 +64,49 @@ export const Sidebar: React.FC = () => {
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 text-slate-200 flex flex-col no-print">
       {/* Brand Header */}
-      <div className="p-6 border-b border-slate-800 flex items-center space-x-3 bg-slate-950">
-        <div className="p-2.5 bg-sky-500/10 rounded-xl border border-sky-500/20 text-sky-400 shadow-inner">
-          <Activity className="w-5 h-5" />
+      <div className="p-6 border-b border-slate-800 bg-slate-950">
+        <div className="flex items-center gap-3 px-2 mb-4">
+          <div className="w-10 h-10 bg-sky-500 rounded-xl flex items-center justify-center shadow-lg shadow-sky-500/30">
+            <Activity className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-black text-white tracking-tight leading-none uppercase">CareFlow</h1>
+            <p className="text-[10px] text-sky-400 font-bold uppercase tracking-widest mt-1">SaaS Planner</p>
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-base font-extrabold tracking-wide text-white m-0 p-0 uppercase">CareFlow</h1>
-          <p className="text-[9px] text-slate-400 font-bold m-0 tracking-wider truncate" title={userRole === 'coordinatore' ? user?.email : 'Operatore (Sola Lettura)'}>
-            {userRole === 'coordinatore' ? user?.email : 'Dipendente (Sola Lettura)'}
-          </p>
-        </div>
+
+        {/* Department Switcher */}
+        {userRole === 'coordinatore' && departments && departments.length > 0 && (
+          <div className="px-2 mb-8">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Reparto Attivo</label>
+            <div className="relative">
+              <select
+                value={currentDepartmentId || ''}
+                onChange={(e) => setCurrentDepartmentId(e.target.value)}
+                className="w-full appearance-none bg-slate-950 border border-slate-800 text-white rounded-xl pl-4 pr-10 py-2.5 text-sm font-bold focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all cursor-pointer"
+              >
+                {departments.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-500">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+            </div>
+            
+            {/* Show department ID as small badge for operators to copy */}
+            <div className="mt-2 bg-slate-950/50 rounded-lg p-2 flex items-center justify-between border border-slate-800/50 group">
+              <span className="text-[10px] text-slate-500 font-medium truncate pr-2">ID: {currentDepartmentId}</span>
+              <button 
+                onClick={() => navigator.clipboard.writeText(currentDepartmentId || '')}
+                className="text-[10px] text-sky-400 hover:text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Copia ID Reparto per inviti"
+              >
+                COPIA
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Menu Options */}

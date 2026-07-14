@@ -11,6 +11,7 @@ export const LoginScreen: React.FC = () => {
   // Form fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   
   // UX States
@@ -24,7 +25,7 @@ export const LoginScreen: React.FC = () => {
 
     try {
       if (isRegister) {
-        await signUp(email, password, selectedRole);
+        await signUp(email, password, selectedRole, selectedRole === 'operatore' ? departmentId : undefined);
       } else {
         await signIn(email, password);
       }
@@ -124,6 +125,26 @@ export const LoginScreen: React.FC = () => {
               />
             </div>
           </div>
+
+          {isRegister && selectedRole === 'operatore' && (
+            <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+              <label className="text-xs font-bold text-sky-400 uppercase tracking-wider pl-1">Codice Reparto</label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-sky-500">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={departmentId}
+                  onChange={(e) => setDepartmentId(e.target.value)}
+                  className="w-full bg-sky-500/5 border border-sky-500/50 text-white rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition-all placeholder:text-slate-500"
+                  placeholder="Richiedi il codice al Coordinatore"
+                />
+              </div>
+              <p className="text-[10px] text-slate-500 pl-1">Esempio: dept_168892345</p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider pl-1">Password</label>

@@ -4,8 +4,8 @@ import type { SupabaseConfig } from '../types';
 
 export const useSupabaseSync = (appState: any) => {
   const {
-    operators, shifts, schedule, 
-    _setOperators, _setShifts, _setSchedule,
+    departments, shiftRequests, operators, shifts, schedule, 
+    _setDepartments, _setShiftRequests, _setOperators, _setShifts, _setSchedule,
     hasLocalChanges, setHasLocalChanges
   } = appState;
 
@@ -40,7 +40,7 @@ export const useSupabaseSync = (appState: any) => {
   }, [supabaseConfig]);
 
   // Auth Functions
-  const signUp = async (email: string, password: string, role: 'coordinatore' | 'operatore'): Promise<void> => {
+  const signUp = async (email: string, password: string, role: 'coordinatore' | 'operatore', departmentId?: string): Promise<void> => {
     if (!supabaseConfig.url || !supabaseConfig.anonKey) throw new Error("Supabase non configurato.");
     const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
     const { data, error } = await supabase.auth.signUp({ email, password });
@@ -55,6 +55,35 @@ export const useSupabaseSync = (appState: any) => {
         if (assocErr) throw new Error(`Associazione coordinatore fallita: ${assocErr.message}`);
         setCurrentCoordinatorId(authUser.id);
         localStorage.setItem('tsrm_coordinator_id', authUser.id);
+      } else if (role === 'operatore' && departmentId) {
+        // Cerca il coordinatorId associato a questo departmentId
+        const { data: depData, error: depErr } = await supabase
+          .from('departments')
+          .select('"coordinatorId"')
+          .eq('id', departmentId)
+          .single();
+          
+        if (depErr || !depData) throw new Error("Codice Reparto non valido o inesistente.");
+        
+        const coordId = depData.coordinatorId;
+        
+        // Crea l'operatore base. Il login avverrà come operatore.
+        const newOp = {
+          id: authUser.id, // usiamo l'ID utente come ID operatore
+          coordinatorId: coordId,
+          nome: email.split('@')[0], // placeholder
+          cognome: 'Nuovo',
+          qualifica: 'TSRM',
+          unitaOperativa: departmentId, // o il nome del dipartimento, usiamo l'id per tracciarlo
+          stato: 'attivo',
+          legge104: false,
+          oreContrattualiMensili: 144
+        };
+        const { error: opErr } = await supabase.from('operators').upsert(newOp);
+        if (opErr) throw new Error(`Creazione profilo operatore fallita: ${opErr.message}`);
+        
+        setCurrentCoordinatorId(coordId);
+        localStorage.setItem('tsrm_coordinator_id', coordId);
       }
 
       setUser(authUser);
@@ -143,19 +172,35 @@ export const useSupabaseSync = (appState: any) => {
     try {
       const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
 
+      const depsToUpsert = departments.map((d: any) => ({ ...d, coordinatorId: currentCoordinatorId }));
       const opsToUpsert = operators.map((o: any) => ({ ...o, coordinatorId: currentCoordinatorId }));
       const shiftsToUpsert = shifts.map((s: any) => ({ ...s, coordinatorId: currentCoordinatorId }));
       const scheduleToUpsert = schedule.map((sc: any) => ({ ...sc, coordinatorId: currentCoordinatorId }));
+      
+      if (depsToUpsert.length > 0) {
+        const { error: depErr } = await supabase.from('departments').upsert(depsToUpsert);
+        if (depErr) throw new Error(depErr.message);
+      }
 
-      const { error: opErr } = await supabase.from('operators').upsert(opsToUpsert);
-      if (opErr) throw new Error(opErr.message);
+      if (opsToUpsert.length > 0) {
+        const { error: opErr } = await supabase.from('operators').upsert(opsToUpsert);
+        if (opErr) throw new Error(opErr.message);
+      }
 
-      const { error: shErr } = await supabase.from('shifts').upsert(shiftsToUpsert);
-      if (shErr) throw new Error(shErr.message);
+      if (shiftsToUpsert.length > 0) {
+        const { error: shErr } = await supabase.from('shifts').upsert(shiftsToUpsert);
+        if (shErr) throw new Error(shErr.message);
+      }
 
       if (scheduleToUpsert.length > 0) {
         const { error: scErr } = await supabase.from('schedule').upsert(scheduleToUpsert);
         if (scErr) throw new Error(scErr.message);
+      }
+
+      // Sync shift_requests: Only if any exist. We don't need coordinatorId because it uses departmentId, but let's upsert what we have
+      if (shiftRequests.length > 0) {
+        const { error: reqErr } = await supabase.from('shift_requests').upsert(shiftRequests);
+        if (reqErr) throw new Error(reqErr.message);
       }
       
       setHasLocalChanges(false);
@@ -174,10 +219,37 @@ export const useSupabaseSync = (appState: any) => {
       const pullInitialData = async () => {
         try {
           const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
-          const { data: finalOps } = await supabase.from('operators').select('*').eq('coordinatorId', currentCoordinatorId);
-          const { data: finalShifts } = await supabase.from('shifts').select('*').eq('coordinatorId', currentCoordinatorId);
-          const { data: finalSchedule } = await supabase.from('schedule').select('*').eq('coordinatorId', currentCoordinatorId);
+          
+          let finalDeps = [], finalOps = [], finalShifts = [], finalSchedule = [], finalReqs = [];
+          
+          if (userRole === 'coordinatore') {
+            const { data: d } = await supabase.from('departments').select('*').eq('coordinatorId', currentCoordinatorId);
+            const { data: o } = await supabase.from('operators').select('*').eq('coordinatorId', currentCoordinatorId);
+            const { data: s } = await supabase.from('shifts').select('*').eq('coordinatorId', currentCoordinatorId);
+            const { data: sc } = await supabase.from('schedule').select('*').eq('coordinatorId', currentCoordinatorId);
+            
+            finalDeps = d || [];
+            finalOps = o || [];
+            finalShifts = s || [];
+            finalSchedule = sc || [];
 
+            // Fetch requests for all departments of this coordinator
+            if (finalDeps.length > 0) {
+              const depIds = finalDeps.map((dep: any) => dep.id);
+              const { data: r } = await supabase.from('shift_requests').select('*').in('departmentId', depIds);
+              finalReqs = r || [];
+            }
+          } else {
+             // For operator: we would need to fetch data based on their department.
+             // We'll implement this later, for now we pull everything based on the department they belong to.
+             // We need to fetch their profile first to get the department ID.
+             // This logic will be added below.
+          }
+
+          if (finalDeps && finalDeps.length > 0) {
+            _setDepartments(finalDeps);
+            localStorage.setItem('tsrm_departments', JSON.stringify(finalDeps));
+          }
           if (finalOps && finalOps.length > 0) {
             _setOperators(finalOps);
             localStorage.setItem('tsrm_operators', JSON.stringify(finalOps));
@@ -186,9 +258,13 @@ export const useSupabaseSync = (appState: any) => {
             _setShifts(finalShifts);
             localStorage.setItem('tsrm_shifts', JSON.stringify(finalShifts));
           }
-          if (finalSchedule) {
+          if (finalSchedule && finalSchedule.length > 0) {
             _setSchedule(finalSchedule);
             localStorage.setItem('tsrm_schedule', JSON.stringify(finalSchedule));
+          }
+          if (finalReqs && finalReqs.length > 0) {
+            _setShiftRequests(finalReqs);
+            localStorage.setItem('tsrm_requests', JSON.stringify(finalReqs));
           }
           setIsDataLoaded(true);
         } catch (e) {
