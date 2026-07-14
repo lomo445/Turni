@@ -111,7 +111,31 @@ export const useSupabaseSync = (appState: any) => {
       setUserRole(role);
       localStorage.setItem('tsrm_user', JSON.stringify(authUser));
       localStorage.setItem('tsrm_user_role', role);
-      setIsDataLoaded(true); // Nessun dato da caricare per i nuovi utenti
+      
+      if (role === 'coordinatore') {
+        setIsDataLoaded(true); // Nessun dato da caricare per i nuovi coordinatori
+      } else {
+        setIsDataLoaded(false); // L'operatore deve scaricare i dati del suo reparto
+        // Aggiungiamo subito il profilo base all'array locale per evitare errori se pullInitialData ritarda
+        if (departmentId) {
+            const { data: deps } = await supabase.from('departments').select('"coordinatorId", id, name');
+            const matchingDep = deps?.find(d => d.id === departmentId || (d.name && d.name.toLowerCase() === departmentId?.toLowerCase()));
+            if (matchingDep) {
+                const newOpLocal = {
+                    id: authUser.id,
+                    coordinatorId: matchingDep.coordinatorId,
+                    nome: nome || email.split('@')[0], 
+                    cognome: cognome || 'Nuovo',
+                    qualifica: 'TSRM',
+                    unitaOperativa: matchingDep.id,
+                    stato: 'attivo',
+                    legge104: false,
+                    oreContrattualiMensili: 144
+                };
+                _setOperators((prev: any) => [...prev, newOpLocal]);
+            }
+        }
+      }
     }
   };
 
