@@ -69,13 +69,13 @@ export const useSupabaseSync = (appState: any) => {
         // Cerca il coordinatorId associato a questo departmentId
         const { data: deps, error: depErr } = await supabase
           .from('departments')
-          .select('"coordinatorId", id, nome');
+          .select('"coordinatorId", id, name');
           
         if (depErr || !deps) throw new Error("Errore durante la verifica del reparto.");
         
         const matchingDep = deps.find(d => 
           d.id === departmentId || 
-          (d.nome && d.nome.toLowerCase() === departmentId?.toLowerCase())
+          (d.name && d.name.toLowerCase() === departmentId?.toLowerCase())
         );
         
         if (!matchingDep) {
