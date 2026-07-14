@@ -126,12 +126,26 @@ export const useSupabaseSync = (appState: any) => {
       if (role === 'coordinatore') {
         setCurrentCoordinatorId(authUser.id);
         localStorage.setItem('tsrm_coordinator_id', authUser.id);
+      } else {
+        // Recupera il coordinatorId dal profilo operatore
+        const { data: opData } = await supabase
+          .from('operators')
+          .select('"coordinatorId"')
+          .eq('id', authUser.id)
+          .single();
+        if (opData && opData.coordinatorId) {
+          setCurrentCoordinatorId(opData.coordinatorId);
+          localStorage.setItem('tsrm_coordinator_id', opData.coordinatorId);
+        }
       }
       localStorage.setItem('tsrm_user', JSON.stringify(authUser));
       localStorage.setItem('tsrm_user_role', role);
       
       setIsDataLoaded(false); // Inizializza il caricamento dati
-      await syncData(); // Forza la sync dopo il login
+      
+      if (role === 'coordinatore') {
+        await syncData(); // Forza la sync solo per il coordinatore
+      }
     }
   };
 
@@ -174,8 +188,10 @@ export const useSupabaseSync = (appState: any) => {
     }
   };
 
-  // Sync Logic (Manual Force Push)
+  // Sync Logic (Manual Force Push - Only for Coordinator)
   const syncData = async (): Promise<void> => {
+    if (userRole !== 'coordinatore') return; // Gli operatori non fanno push!
+    
     if (!supabaseConfig.url || !supabaseConfig.anonKey || !currentCoordinatorId) {
       throw new Error('Supabase non configurato o utente non loggato.');
     }
@@ -250,10 +266,25 @@ export const useSupabaseSync = (appState: any) => {
               finalReqs = r || [];
             }
           } else {
-             // For operator: we would need to fetch data based on their department.
-             // We'll implement this later, for now we pull everything based on the department they belong to.
-             // We need to fetch their profile first to get the department ID.
-             // This logic will be added below.
+             // For operator: We pull everything belonging to their coordinator
+            const { data: d } = await supabase.from('departments').select('*').eq('coordinatorId', currentCoordinatorId);
+            const { data: o } = await supabase.from('operators').select('*').eq('coordinatorId', currentCoordinatorId);
+            const { data: s } = await supabase.from('shifts').select('*').eq('coordinatorId', currentCoordinatorId);
+            const { data: sc } = await supabase.from('schedule').select('*').eq('coordinatorId', currentCoordinatorId);
+            
+            finalDeps = d || [];
+            finalOps = o || [];
+            finalShifts = s || [];
+            finalSchedule = sc || [];
+            
+            // Only fetch requests involving this operator
+            const userId = user?.id || (localStorage.getItem('tsrm_user') ? JSON.parse(localStorage.getItem('tsrm_user') as string).id : null);
+            if (userId) {
+              const { data: r } = await supabase.from('shift_requests').select('*').eq('operatoreId', userId);
+              finalReqs = r || [];
+            } else {
+              finalReqs = [];
+            }
           }
 
           if (finalDeps && finalDeps.length > 0) {
