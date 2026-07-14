@@ -119,10 +119,8 @@ export const useSupabaseSync = (appState: any) => {
         .eq('id', authUser.id)
         .single();
       
-      const role = (coordData && !coordErr) ? 'coordinatore' : 'operatore';
+      let role: 'coordinatore' | 'operatore' = (coordData && !coordErr) ? 'coordinatore' : 'operatore';
       
-      setUser(authUser);
-      setUserRole(role);
       if (role === 'coordinatore') {
         setCurrentCoordinatorId(authUser.id);
         localStorage.setItem('tsrm_coordinator_id', authUser.id);
@@ -133,11 +131,29 @@ export const useSupabaseSync = (appState: any) => {
           .select('"coordinatorId"')
           .eq('id', authUser.id)
           .single();
+          
         if (opData && opData.coordinatorId) {
           setCurrentCoordinatorId(opData.coordinatorId);
           localStorage.setItem('tsrm_coordinator_id', opData.coordinatorId);
+        } else {
+          // Fallback: se non è in coordinators e non è in operators, potrebbe essere un VECCHIO coordinatore!
+          // Verifichiamo se ha reparti a suo nome
+          const { data: oldDeps } = await supabase.from('departments').select('id').eq('coordinatorId', authUser.id).limit(1);
+          if (oldDeps && oldDeps.length > 0) {
+            role = 'coordinatore';
+            setCurrentCoordinatorId(authUser.id);
+            localStorage.setItem('tsrm_coordinator_id', authUser.id);
+            // Inseriamolo in coordinators per il futuro
+            await supabase.from('coordinators').upsert({ id: authUser.id, email: email.trim().toLowerCase() });
+          } else {
+            // Se non è niente di tutto ciò, logghiamolo lo stesso ma diamogli il suo ID come fallback per non bloccare la UI
+            setCurrentCoordinatorId(authUser.id);
+            localStorage.setItem('tsrm_coordinator_id', authUser.id);
+          }
         }
       }
+      setUser(authUser);
+      setUserRole(role);
       localStorage.setItem('tsrm_user', JSON.stringify(authUser));
       localStorage.setItem('tsrm_user_role', role);
       
