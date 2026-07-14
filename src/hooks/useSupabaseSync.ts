@@ -27,12 +27,22 @@ export const useSupabaseSync = (appState: any) => {
 
   const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(() => {
     const saved = localStorage.getItem('tsrm_supabase');
-    if (saved) return JSON.parse(saved);
-    return {
+    const defaultConfig = {
       url: 'https://oqglyzmfbtgznybccpnf.supabase.co',
       anonKey: 'sb_publishable_4IOMMi2znxIK1OBqzjnnAQ_9UbLm4Wr',
       connected: true
     };
+    
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.url && parsed.anonKey) {
+          return parsed;
+        }
+      } catch(e) {}
+    }
+    
+    return defaultConfig;
   });
 
   useEffect(() => {
