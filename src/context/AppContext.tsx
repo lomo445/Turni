@@ -194,10 +194,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOperators(prev => prev.map(o => o.id === op.id ? op : o));
   };
 
-  const deleteOperator = (id: string) => {
+  const deleteOperator = async (id: string) => {
     setOperators(prev => prev.filter(o => o.id !== id));
-    // Remove their scheduled shifts
     setSchedule(prev => prev.filter(s => s.operatoreId !== id));
+    if (supabaseConfig.connected && supabaseConfig.url && supabaseConfig.anonKey && currentCoordinatorId) {
+      const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+      await supabase.from('operators').delete().eq('id', id).eq('coordinatorId', currentCoordinatorId);
+      await supabase.from('schedule').delete().eq('operatoreId', id).eq('coordinatorId', currentCoordinatorId);
+    }
   };
 
   // Shifts Actions
@@ -209,14 +213,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setShifts(prev => prev.map(st => st.codice === s.codice ? s : st));
   };
 
-  const deleteShiftType = (code: string) => {
+  const deleteShiftType = async (code: string) => {
     setShifts(prev => prev.filter(st => st.codice !== code));
+    if (supabaseConfig.connected && supabaseConfig.url && supabaseConfig.anonKey && currentCoordinatorId) {
+      const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+      await supabase.from('shifts').delete().eq('codice', code).eq('coordinatorId', currentCoordinatorId);
+    }
   };
 
   // Calendar editing Actions
-  const assignShift = (opId: string, dateStr: string, shiftCode: string) => {
+  const assignShift = async (opId: string, dateStr: string, shiftCode: string) => {
     setSchedule(prev => {
       const filtered = prev.filter(s => !(s.operatoreId === opId && s.data === dateStr));
+      if (!shiftCode) return filtered;
       return [...filtered, {
         id: `${opId}_${dateStr}`,
         operatoreId: opId,
@@ -224,6 +233,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         codiceTurno: shiftCode
       }];
     });
+
+    if (!shiftCode && supabaseConfig.connected && supabaseConfig.url && supabaseConfig.anonKey && currentCoordinatorId) {
+      const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+      await supabase.from('schedule').delete().eq('id', `${opId}_${dateStr}`).eq('coordinatorId', currentCoordinatorId);
+    }
   };
 
   const assignMultipleShifts = (schedulesToAdd: DailySchedule[]) => {
@@ -273,9 +287,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const clearMonthSchedule = (y: number, m: number) => {
+  const clearMonthSchedule = async (y: number, m: number) => {
     const targetMonthPrefix = `${y}-${String(m).padStart(2, '0')}`;
     setSchedule(prev => prev.filter(s => !s.data.startsWith(targetMonthPrefix)));
+    
+    if (supabaseConfig.connected && supabaseConfig.url && supabaseConfig.anonKey && currentCoordinatorId) {
+      const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+      await supabase.from('schedule').delete().like('data', `${targetMonthPrefix}%`).eq('coordinatorId', currentCoordinatorId);
+    }
   };
 
   // Import historical Excel
