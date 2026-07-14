@@ -129,7 +129,7 @@ export const useSupabaseSync = (appState: any) => {
     setUserRole(null);
     setUser(null);
     setCurrentCoordinatorId(null);
-    setSupabaseConfig({ url: '', anonKey: '', connected: false });
+    // Non resettiamo supabaseConfig qui, altrimenti disconnettiamo l'app per i futuri login!
     
     _setOperators([]);
     _setShifts([]);
@@ -142,7 +142,7 @@ export const useSupabaseSync = (appState: any) => {
     localStorage.removeItem('tsrm_operators');
     localStorage.removeItem('tsrm_shifts');
     localStorage.removeItem('tsrm_schedule');
-    localStorage.removeItem('tsrm_supabase');
+    // localStorage.removeItem('tsrm_supabase'); -> Manteniamo la configurazione
   };
 
   const connectSupabase = async (url: string, key: string): Promise<boolean> => {
