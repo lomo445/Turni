@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 export const EmployeeDashboard: React.FC = () => {
-  const { user, operators, schedule, shifts, shiftRequests, addRequest, currentDepartmentId } = useApp();
+  const { user, operators, schedule, shifts, shiftRequests, addRequest, deleteRequest, currentDepartmentId } = useApp();
   
   // Trova l'operatore corrispondente all'utente loggato (in una vera app, via Auth UID o Email)
   // Per la simulazione prendiamo un operatore a caso se la mail non matcha, solo per mostrare l'UI.
@@ -170,7 +170,18 @@ export const EmployeeDashboard: React.FC = () => {
                     </div>
                     {getStatusBadge(req.stato)}
                   </div>
-                  {req.dettagli && <p className="text-xs text-slate-600 italic">"{req.dettagli}"</p>}
+                  <div className="flex justify-between items-end">
+                    {req.dettagli ? <p className="text-xs text-slate-600 italic">"{req.dettagli}"</p> : <div/>}
+                    
+                    {req.stato === 'in_attesa' && (
+                      <button 
+                        onClick={() => deleteRequest(req.id)}
+                        className="text-xs font-bold text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        <XCircle className="w-3.5 h-3.5" /> Annulla
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))
             )}

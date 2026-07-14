@@ -50,7 +50,7 @@ export const useSupabaseSync = (appState: any) => {
   }, [supabaseConfig]);
 
   // Auth Functions
-  const signUp = async (email: string, password: string, role: 'coordinatore' | 'operatore', departmentId?: string): Promise<void> => {
+  const signUp = async (email: string, password: string, role: 'coordinatore' | 'operatore', departmentId?: string, nome?: string, cognome?: string): Promise<void> => {
     if (!supabaseConfig.url || !supabaseConfig.anonKey) throw new Error("Supabase non configurato.");
     const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
     const { data, error } = await supabase.auth.signUp({ email, password });
@@ -81,8 +81,8 @@ export const useSupabaseSync = (appState: any) => {
         const newOp = {
           id: authUser.id, // usiamo l'ID utente come ID operatore
           coordinatorId: coordId,
-          nome: email.split('@')[0], // placeholder
-          cognome: 'Nuovo',
+          nome: nome || email.split('@')[0], 
+          cognome: cognome || 'Nuovo',
           qualifica: 'TSRM',
           unitaOperativa: departmentId, // o il nome del dipartimento, usiamo l'id per tracciarlo
           stato: 'attivo',

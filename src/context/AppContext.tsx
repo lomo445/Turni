@@ -33,6 +33,7 @@ interface AppContextType {
   deleteOperator: (id: string) => void;
   addRequest: (req: ShiftRequest) => void;
   updateRequestStatus: (id: string, stato: 'approvato' | 'rifiutato') => void;
+  deleteRequest: (id: string) => Promise<void>;
   addShiftType: (s: ShiftType) => void;
   updateShiftType: (s: ShiftType) => void;
   deleteShiftType: (code: string) => void;
@@ -48,7 +49,7 @@ interface AppContextType {
   supabaseConfig: SupabaseConfig;
   saveSupabaseSettings: (url: string, key: string) => Promise<boolean>;
   syncData: () => Promise<void>;
-  signUp: (email: string, password: string, role: 'coordinatore' | 'operatore', departmentId?: string) => Promise<void>;
+  signUp: (email: string, password: string, role: 'coordinatore' | 'operatore', departmentId?: string, nome?: string, cognome?: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   logout: () => void;
   geminiApiKey: string | null;
@@ -72,7 +73,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     highlightedDay, setHighlightedDay, departments, setDepartments,
     currentDepartmentId, setCurrentDepartmentId,
     operators, setOperators, shifts, setShifts, schedule, setSchedule,
-    shiftRequests, setShiftRequests
+    shiftRequests
   } = appState;
   
   const {
@@ -134,9 +135,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addRequest = (req: ShiftRequest) => setShiftRequests((prev: ShiftRequest[]) => [...prev, req]);
+  const addRequest = (req: ShiftRequest) => {
+    appState.setShiftRequests((prev: ShiftRequest[]) => [...prev, req]);
+    appState.setHasLocalChanges(true);
+  };
+
   const updateRequestStatus = (id: string, stato: 'approvato' | 'rifiutato') => {
-    setShiftRequests((prev: ShiftRequest[]) => prev.map((r: ShiftRequest) => r.id === id ? { ...r, stato } : r));
+    appState.setShiftRequests((prev: ShiftRequest[]) => prev.map(r => r.id === id ? { ...r, stato } : r));
+    appState.setHasLocalChanges(true);
+  };
+
+  const deleteRequest = async (id: string) => {
+    appState.setShiftRequests((prev: ShiftRequest[]) => prev.filter(r => r.id !== id));
+    if (supabaseConfig.connected && supabaseConfig.url && supabaseConfig.anonKey) {
+      const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+      await supabase.from('shift_requests').delete().eq('id', id);
+    }
   };
 
   const addShiftType = (s: ShiftType) => {
@@ -275,7 +289,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       currentDepartmentId, setCurrentDepartmentId, updateDepartment, addDepartment, deleteDepartment,
       operators, shifts, schedule, shiftRequests, errors,
       addOperator, updateOperator, deleteOperator,
-      addRequest, updateRequestStatus,
+      addRequest, updateRequestStatus, deleteRequest,
       addShiftType, updateShiftType, deleteShiftType,
       assignShift, assignMultipleShifts, runAutoGeneration, clearMonthSchedule,
       importHistoricalExcel, exportExcelFile,
