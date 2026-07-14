@@ -67,15 +67,26 @@ export const useSupabaseSync = (appState: any) => {
         localStorage.setItem('tsrm_coordinator_id', authUser.id);
       } else if (role === 'operatore' && departmentId) {
         // Cerca il coordinatorId associato a questo departmentId
-        const { data: depData, error: depErr } = await supabase
+        const { data: deps, error: depErr } = await supabase
           .from('departments')
-          .select('"coordinatorId"')
-          .eq('id', departmentId)
-          .single();
+          .select('"coordinatorId", id, nome');
           
-        if (depErr || !depData) throw new Error("Codice Reparto non valido o inesistente.");
+        if (depErr || !deps) throw new Error("Errore durante la verifica del reparto.");
         
-        const coordId = depData.coordinatorId;
+        const matchingDep = deps.find(d => 
+          d.id === departmentId || 
+          (d.nome && d.nome.toLowerCase() === departmentId?.toLowerCase())
+        );
+        
+        if (!matchingDep) {
+          // Attenzione: eliminiamo l'utente appena creato su Auth se il reparto non esiste, 
+          // così può riprovare senza l'errore "User already registered"
+          await supabase.auth.admin?.deleteUser(authUser.id); // Questo funziona solo se abbiamo la service role key, quindi fallirà silenziosamente se non l'abbiamo.
+          throw new Error("Codice o Nome Reparto non valido.");
+        }
+        
+        const coordId = matchingDep.coordinatorId;
+        const realDeptId = matchingDep.id;
         
         // Crea l'operatore base. Il login avverrà come operatore.
         const newOp = {
@@ -84,7 +95,7 @@ export const useSupabaseSync = (appState: any) => {
           nome: nome || email.split('@')[0], 
           cognome: cognome || 'Nuovo',
           qualifica: 'TSRM',
-          unitaOperativa: departmentId, // o il nome del dipartimento, usiamo l'id per tracciarlo
+          unitaOperativa: realDeptId, // usiamo l'ID reale
           stato: 'attivo',
           legge104: false,
           oreContrattualiMensili: 144

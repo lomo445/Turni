@@ -14,9 +14,8 @@ import {
 export const EmployeeDashboard: React.FC = () => {
   const { user, operators, schedule, shifts, shiftRequests, addRequest, deleteRequest, currentDepartmentId } = useApp();
   
-  // Trova l'operatore corrispondente all'utente loggato (in una vera app, via Auth UID o Email)
-  // Per la simulazione prendiamo un operatore a caso se la mail non matcha, solo per mostrare l'UI.
-  const myProfile = operators.find(o => o.email === user?.email) || operators[0];
+  // Trova l'operatore corrispondente all'utente loggato tramite ID
+  const myProfile = operators.find(o => o.id === user?.id);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [tipoRichiesta, setTipoRichiesta] = useState<'cambio_turno' | 'ferie' | 'permesso'>('ferie');
