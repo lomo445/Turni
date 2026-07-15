@@ -340,23 +340,23 @@ export const useSupabaseSync = (appState: any) => {
             }
           }
 
-          if (finalDeps && finalDeps.length > 0) {
+          if (finalDeps) {
             _setDepartments(finalDeps);
             localStorage.setItem('tsrm_departments', JSON.stringify(finalDeps));
           }
-          if (finalOps && finalOps.length > 0) {
+          if (finalOps) {
             _setOperators(finalOps);
             localStorage.setItem('tsrm_operators', JSON.stringify(finalOps));
           }
-          if (finalShifts && finalShifts.length > 0) {
+          if (finalShifts) {
             _setShifts(finalShifts);
             localStorage.setItem('tsrm_shifts', JSON.stringify(finalShifts));
           }
-          if (finalSchedule && finalSchedule.length > 0) {
+          if (finalSchedule) {
             _setSchedule(finalSchedule);
             localStorage.setItem('tsrm_schedule', JSON.stringify(finalSchedule));
           }
-          if (finalReqs && finalReqs.length > 0) {
+          if (finalReqs) {
             _setShiftRequests(finalReqs);
             localStorage.setItem('tsrm_requests', JSON.stringify(finalReqs));
           }
@@ -369,7 +369,7 @@ export const useSupabaseSync = (appState: any) => {
       };
       pullInitialData();
     }
-  }, [supabaseConfig.connected, currentCoordinatorId]);
+  }, [supabaseConfig.connected, currentCoordinatorId, userRole]);
 
   // Debounced Auto-Sync
   useEffect(() => {
