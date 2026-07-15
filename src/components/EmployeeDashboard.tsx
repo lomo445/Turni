@@ -30,12 +30,17 @@ export const EmployeeDashboard: React.FC = () => {
           <div className="mt-4 text-xs font-mono bg-white p-3 rounded border border-rose-100 overflow-auto">
             <div>User ID: {user?.id}</div>
             <div>User Email: {user?.email}</div>
-            <div>Operators count: {operators.length}</div>
-            <div>Operator IDs: {operators.map(o => o.id).join(', ')}</div>
+            <div>Operators state length: {operators?.length}</div>
+            <div>Operator IDs: {operators?.map(o => o.id).join(', ')}</div>
             <div>IsDataLoaded: {isDataLoaded ? 'true' : 'false'}</div>
-            <div>CurrentCoordinatorId: {currentDepartmentId /* wait this is wrong */}</div>
+            <div>CurrentDepartmentId: {currentDepartmentId}</div>
+            <div>LocalStorage tsrm_coordinator_id: {localStorage.getItem('tsrm_coordinator_id')}</div>
+            <div>LocalStorage tsrm_user_role: {localStorage.getItem('tsrm_user_role')}</div>
           </div>
         </div>
+        <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors w-full">
+            Forza Ricaricamento Pagina
+        </button>
       </div>
     );
   }

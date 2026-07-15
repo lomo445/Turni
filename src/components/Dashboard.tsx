@@ -78,8 +78,22 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-8">
+      {/* Info Debug per capire perché la UI si vuota */}
+      {operators.length === 0 && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl mt-4">
+              <h3 className="font-bold">Debug Info - Dati non caricati:</h3>
+              <div className="mt-2 text-xs font-mono">
+                  <div>localStorage tsrm_coordinator_id: {localStorage.getItem('tsrm_coordinator_id')}</div>
+                  <div>localStorage tsrm_user_role: {localStorage.getItem('tsrm_user_role')}</div>
+                  <div>localStorage tsrm_current_dept_id: {localStorage.getItem('tsrm_current_dept_id')}</div>
+                  <div>Operators state length: {operators.length}</div>
+              </div>
+              <button onClick={() => window.location.reload()} className="mt-2 px-3 py-1 bg-rose-600 text-white rounded text-xs font-bold">Ricarica Pagina (Forza Fetch)</button>
+          </div>
+      )}
+
+      {/* Grid Status */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
         {/* Card 1: Operatori */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
