@@ -113,10 +113,11 @@ export const useSupabaseSync = (appState: any) => {
       localStorage.setItem('tsrm_user', JSON.stringify(authUser));
       localStorage.setItem('tsrm_user_role', role);
       
+      setIsDataLoaded(false); // Tutti devono aspettare il pullInitialData!
+      
       if (role === 'coordinatore') {
-        setIsDataLoaded(true); // Nessun dato da caricare per i nuovi coordinatori
+        // Rimosso setIsDataLoaded(true) sincrono
       } else {
-        setIsDataLoaded(false); // L'operatore deve scaricare i dati del suo reparto
         // Aggiungiamo subito il profilo base all'array locale per evitare errori se pullInitialData ritarda
         if (departmentId) {
             const cleanDeptIdLocal = departmentId.trim();
@@ -194,7 +195,7 @@ export const useSupabaseSync = (appState: any) => {
       localStorage.setItem('tsrm_user', JSON.stringify(authUser));
       localStorage.setItem('tsrm_user_role', role);
       
-      setIsDataLoaded(false); // Inizializza il caricamento dati
+      setIsDataLoaded(false); // Inizializza il caricamento dati, pullInitialData lo metterà a true!
       
       if (role === 'coordinatore') {
         await syncData(); // Forza la sync solo per il coordinatore

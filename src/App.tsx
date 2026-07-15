@@ -12,7 +12,6 @@ import { ExcelImporter } from './components/ExcelImporter';
 import { LoginScreen } from './components/LoginScreen';
 import { EmployeeDashboard } from './components/EmployeeDashboard';
 import { RequestsManager } from './components/RequestsManager';
-import { WizardScreen } from './components/WizardScreen';
 import { DepartmentManager } from './components/DepartmentManager';
 import { RefreshCw, Activity, Wrench, Loader2 } from 'lucide-react';
 
@@ -20,7 +19,7 @@ import { RefreshCw, Activity, Wrench, Loader2 } from 'lucide-react';
 declare const __BUILD_TIME__: number;
 
 const MainLayout: React.FC = () => {
-  const { activeView, userRole, user, isDataLoaded, departments } = useApp();
+  const { activeView, userRole, user, isDataLoaded } = useApp();
   const isCoordinatore = userRole === 'coordinatore';
 
   if (user && !isDataLoaded) {
@@ -33,9 +32,10 @@ const MainLayout: React.FC = () => {
     );
   }
 
-  if (isCoordinatore && isDataLoaded && departments.length === 0) {
-    return <WizardScreen />;
-  }
+  // Wizard temporaneamente rimosso su richiesta dell'utente
+  // if (isCoordinatore && isDataLoaded && departments.length === 0) {
+  //   return <WizardScreen />;
+  // }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-900 font-sans">
