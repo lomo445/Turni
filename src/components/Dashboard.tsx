@@ -87,6 +87,7 @@ export const Dashboard: React.FC = () => {
                   <div>localStorage tsrm_user_role: {localStorage.getItem('tsrm_user_role')}</div>
                   <div>localStorage tsrm_current_dept_id: {localStorage.getItem('tsrm_current_dept_id')}</div>
                   <div>Operators state length: {operators.length}</div>
+                  <div className="mt-2 p-2 bg-rose-100 rounded text-rose-900 overflow-auto break-all">Trace: {localStorage.getItem('debug_trace') || 'No trace'}</div>
               </div>
               <button onClick={() => window.location.reload()} className="mt-2 px-3 py-1 bg-rose-600 text-white rounded text-xs font-bold">Ricarica Pagina (Forza Fetch)</button>
           </div>

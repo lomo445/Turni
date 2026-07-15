@@ -302,11 +302,16 @@ export const useSupabaseSync = (appState: any) => {
           
           let finalDeps = [], finalOps = [], finalShifts = [], finalSchedule = [], finalReqs = [];
           
+          let trace = "Start. ";
           if (userRole === 'coordinatore') {
-            const { data: d } = await supabase.from('departments').select('*').eq('coordinatorId', currentCoordinatorId);
-            const { data: o } = await supabase.from('operators').select('*').eq('coordinatorId', currentCoordinatorId);
+            trace += "Fetch deps... ";
+            const { data: d, error: errD } = await supabase.from('departments').select('*').eq('coordinatorId', currentCoordinatorId);
+            trace += `D: ${d?.length || 0} err: ${errD?.message || 'none'}. `;
+            const { data: o, error: errO } = await supabase.from('operators').select('*').eq('coordinatorId', currentCoordinatorId);
+            trace += `O: ${o?.length || 0} err: ${errO?.message || 'none'}. `;
             const { data: s } = await supabase.from('shifts').select('*').eq('coordinatorId', currentCoordinatorId);
             const { data: sc } = await supabase.from('schedule').select('*').eq('coordinatorId', currentCoordinatorId);
+            localStorage.setItem('debug_trace', trace);
             
             finalDeps = d || [];
             finalOps = o || [];
@@ -362,7 +367,8 @@ export const useSupabaseSync = (appState: any) => {
             localStorage.setItem('tsrm_requests', JSON.stringify(finalReqs));
           }
           // setIsDataLoaded(true) rimosso da qui e messo nel finally
-        } catch (e) {
+        } catch (e: any) {
+          localStorage.setItem('debug_trace', (localStorage.getItem('debug_trace') || '') + ` Exception: ${e.message}`);
           console.error("Errore nel pull iniziale:", e);
         } finally {
           setIsDataLoaded(true);
