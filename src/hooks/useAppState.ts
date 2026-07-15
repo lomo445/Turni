@@ -18,7 +18,7 @@ export const useAppState = () => {
   const [hasLocalChanges, setHasLocalChanges] = useState(false);
 
   // Departments State
-  const [departments, setDepartments] = useState<Department[]>(() => {
+  const [departments, _setDepartments] = useState<Department[]>(() => {
     try {
       const stored = localStorage.getItem('tsrm_departments');
       if (stored) return JSON.parse(stored);
@@ -78,6 +78,12 @@ export const useAppState = () => {
   });
 
   // Trackers
+  const setDepartments = (val: any) => {
+    if (typeof val === 'function') { _setDepartments((prev) => val(prev)); } 
+    else { _setDepartments(val); }
+    setHasLocalChanges(true);
+  };
+
   const setOperators = (val: any) => {
     if (typeof val === 'function') { _setOperators((prev) => val(prev)); } 
     else { _setOperators(val); }
@@ -121,7 +127,7 @@ export const useAppState = () => {
     activeView, setActiveView,
     highlightedDay, setHighlightedDay,
     hasLocalChanges, setHasLocalChanges,
-    departments, setDepartments,
+    departments, setDepartments, _setDepartments,
     currentDepartmentId, setCurrentDepartmentId,
     operators, setOperators, _setOperators,
     shifts, setShifts, _setShifts,
